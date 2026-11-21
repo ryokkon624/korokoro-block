@@ -1,16 +1,28 @@
-// がめんの きりかえ（タイトル → ステージえらび → プレイ → クリア）
+// がめんの きりかえ（タイトル → ステージえらび → プレイ → クリア / おうちづくり）
 
 import { Game } from './game.js';
+import { House, BLOCKS, BLOCK_ORDER, blockIconURL } from './house.js';
 import { STAGES } from './stages.js';
-import { readTilt, bindMouse, requestSensorPermission, enterFullscreenLandscape, keepScreenOn } from './sensor.js';
+import {
+  readTilt,
+  bindMouse,
+  setMouseTilt,
+  requestSensorPermission,
+  enterFullscreenLandscape,
+  keepScreenOn,
+} from './sensor.js';
 import { initAudio, sfx } from './sound.js';
 import { loadSave, writeSave } from './save.js';
 import { ITEM_ORDER, itemIconURL } from './art.js';
+
+// はじめて おうちづくりを開いたときの プレゼント
+const GIFT = { wood: 20, stone: 20, flower: 5, gem: 3 };
 
 const $ = (id) => document.getElementById(id);
 const cv = $('cv');
 const ctx = cv.getContext('2d');
 const game = new Game();
+const house = new House();
 const icons = Object.fromEntries(ITEM_ORDER.map((type) => [type, itemIconURL(type)]));
 let save = loadSave();
 let current = 'title';
@@ -25,12 +37,16 @@ function resize() {
   cv.style.height = `${H}px`;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   game.resize(W, H, dpr);
+  house.resize(W, H);
+  layoutPalette();
 }
 
 function show(name) {
   current = name;
   for (const id of ['title', 'select', 'clear']) $(id).classList.toggle('hidden', id !== name);
-  $('bBack').classList.toggle('hidden', name !== 'play');
+  $('bBack').classList.toggle('hidden', name !== 'play' && name !== 'house');
+  $('palette').classList.toggle('hidden', name !== 'house');
+  setMouseTilt(name !== 'house');
 }
 
 // ボタンを押すたびに呼ぶ（音・センサー・全画面はタップのあとでないと使えない）
@@ -91,6 +107,81 @@ game.onClear = (res) => {
   show('clear');
 };
 
+// ---------- おうちづくり ----------
+function showHouse() {
+  tapped();
+  house.setup(save.house, save.items);
+  show('house');
+  if (!save.houseGift) {
+    for (const [type, n] of Object.entries(GIFT)) save.items[type] += n;
+    save.houseGift = true;
+    writeSave(save);
+    $('giftItems').innerHTML = invHTML(GIFT);
+    $('gift').classList.remove('hidden');
+  }
+  updatePalette();
+}
+
+house.onChange = () => {
+  save.house = house.rows();
+  writeSave(save);
+  updatePalette();
+};
+
+function buildPalette() {
+  const pal = $('palette');
+  for (const code of BLOCK_ORDER) {
+    const btn = document.createElement('button');
+    btn.className = 'pal';
+    btn.dataset.code = code;
+    btn.innerHTML =
+      `<img class="blk" src="${blockIconURL(code)}" alt="">` +
+      `<span class="cnt"><img src="${icons[BLOCKS[code].material]}" alt="">×<b>0</b></span>`;
+    btn.onclick = () => {
+      sfx.tap();
+      house.selected = code;
+      updatePalette();
+    };
+    pal.appendChild(btn);
+  }
+}
+
+function updatePalette() {
+  for (const btn of $('palette').children) {
+    const n = save.items[BLOCKS[btn.dataset.code].material];
+    btn.classList.toggle('on', btn.dataset.code === house.selected);
+    btn.classList.toggle('empty', n <= 0);
+    btn.querySelector('b').textContent = n;
+  }
+}
+
+function layoutPalette() {
+  const r = house.paletteRect();
+  const pal = $('palette');
+  Object.assign(pal.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
+  pal.style.setProperty('--t', `${r.t}px`);
+}
+
+// ひとさし指 1本だけで おく
+let paintPointer = null;
+cv.addEventListener('pointerdown', (e) => {
+  if (current !== 'house' || paintPointer !== null) return;
+  paintPointer = e.pointerId;
+  cv.setPointerCapture(e.pointerId);
+  house.pointerDown(e.clientX, e.clientY);
+});
+cv.addEventListener('pointermove', (e) => {
+  if (e.pointerId === paintPointer) house.pointerMove(e.clientX, e.clientY);
+});
+const endPaint = (e) => {
+  if (e.pointerId !== paintPointer) return;
+  paintPointer = null;
+  house.pointerUp();
+};
+cv.addEventListener('pointerup', endPaint);
+cv.addEventListener('pointercancel', endPaint);
+
+// ---------- ボタン ----------
 $('bPlay').onclick = () => {
   tapped();
   showSelect();
@@ -105,22 +196,34 @@ $('bToSelect').onclick = () => {
   tapped();
   showSelect();
 };
+$('bHouse').onclick = showHouse;
+$('bGiftOk').onclick = () => {
+  sfx.tap();
+  $('gift').classList.add('hidden');
+  updatePalette();
+};
 
 addEventListener('contextmenu', (e) => e.preventDefault());
 addEventListener('resize', resize);
 bindMouse(cv);
+buildPalette();
 resize();
 
 let last = performance.now();
 function loop(now) {
   const dt = Math.min(0.033, (now - last) / 1000);
   last = now;
-  if (current === 'play') game.update(dt, readTilt());
-  else if (current === 'clear') game.update(dt, { x: 0, y: 0 });
-  game.render(ctx);
+  if (current === 'house') {
+    house.update(dt, readTilt());
+    house.render(ctx);
+  } else {
+    if (current === 'play') game.update(dt, readTilt());
+    else if (current === 'clear') game.update(dt, { x: 0, y: 0 });
+    game.render(ctx);
+  }
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 
 // デバッグ用（PC で動作確認するときに使う）
-window.korokoro = { game, get save() { return save; }, resetSave() { save = loadSave(); } };
+window.korokoro = { game, house, get save() { return save; }, resetSave() { save = loadSave(); } };

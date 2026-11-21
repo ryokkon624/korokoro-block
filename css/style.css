@@ -154,7 +154,8 @@ button {
 }
 
 #inventory,
-#clearItems {
+#clearItems,
+#giftItems {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -198,4 +199,61 @@ button {
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.85);
   color: var(--ink);
+}
+
+/* ---------- おうちづくり ---------- */
+#palette {
+  position: fixed;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: calc(var(--t) * 0.3);
+}
+
+.pal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--t) * 0.08);
+  width: calc(var(--t) * 2.1);
+  height: calc(var(--t) * 1.6);
+  padding: 0;
+  border-radius: calc(var(--t) * 0.25);
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--ink);
+  font-size: calc(var(--t) * 0.36);
+  box-shadow: 0 calc(var(--t) * 0.08) 0 #b9a88f;
+}
+
+.pal .blk {
+  width: calc(var(--t) * 0.85);
+  height: calc(var(--t) * 0.85);
+  image-rendering: pixelated;
+}
+
+.pal .cnt {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1em;
+}
+
+.pal .cnt img {
+  width: 1.1em;
+  height: 1.1em;
+  image-rendering: pixelated;
+}
+
+.pal.on {
+  background: #ffd23f;
+  box-shadow: 0 0 0 calc(var(--t) * 0.07) #fff, 0 calc(var(--t) * 0.08) 0 #c99a00;
+  transform: translateY(calc(var(--t) * -0.08));
+}
+
+.pal.empty {
+  opacity: 0.5;
+}
+
+#gift {
+  z-index: 10;
 }
