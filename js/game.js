@@ -2,7 +2,8 @@
 // 位置や速さは「マス」単位で計算し、えがくときにピクセルへ直す
 
 import { STAGES } from './stages.js';
-import { tileTex, itemSprites, ITEM_NAMES, ITEM_COLORS } from './art.js';
+import { tileTex, itemSprites, ITEM_NAMES, ITEM_COLORS, ITEM_AMOUNT, FONT, hash, drawBall } from './art.js';
+import { collideCircle } from './physics.js';
 import { sfx, buzz } from './sound.js';
 
 const BALL_R = 0.36;
@@ -11,14 +12,10 @@ const KEEP = { grass: 0.5, ice: 0.85 }; // 1秒あたりに残る速さ（こお
 const MAX_SPEED = 14;
 const BOUNCE = 0.4;
 const HUD = 0.9; // 上の表示のたかさ（マス）
-const FONT = '"M PLUS Rounded 1c", system-ui, sans-serif';
 
 const WALLS = { '#': 'stone', '=': 'plank', T: 'leaves' };
 const FLOORS = { '.': 'grass', '~': 'ice' };
 const ITEMS = { w: 'wood', r: 'stone', f: 'flower', d: 'gem' };
-
-const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
-const hash = (x, y) => ((x * 73856093) ^ (y * 19349663)) >>> 0;
 
 export class Game {
   constructor() {
@@ -163,7 +160,7 @@ export class Game {
     for (let i = 0; i < n; i++) {
       b.x += (b.vx * dt) / n;
       b.y += (b.vy * dt) / n;
-      hit = Math.max(hit, this.collide());
+      hit = Math.max(hit, collideCircle(b, BALL_R, (x, y) => this.isWall(x, y), BOUNCE));
     }
     if (hit > 2.5 && this.time - this.lastBump > 0.08) {
       this.lastBump = this.time;
@@ -175,7 +172,7 @@ export class Game {
       it.taken = true;
       sfx.pickup();
       this.sparkle(it.x, it.y, ITEM_COLORS[it.type]);
-      this.texts.push({ text: `${ITEM_NAMES[it.type]} ゲット！`, x: it.x, y: it.y - 0.4, life: 1.2 });
+      this.texts.push({ text: `${ITEM_NAMES[it.type]} ×${ITEM_AMOUNT[it.type]} ゲット！`, x: it.x, y: it.y - 0.4, life: 1.2 });
     }
 
     const cell = this.cellAt(b.x, b.y);
@@ -199,47 +196,6 @@ export class Game {
     }
   }
 
-  // かべ（マス目の四角）とボール（円）のあたり判定。ぶつかった強さを返す
-  collide() {
-    const b = this.ball;
-    let hit = 0;
-    for (let ty = Math.floor(b.y - BALL_R); ty <= Math.floor(b.y + BALL_R); ty++) {
-      for (let tx = Math.floor(b.x - BALL_R); tx <= Math.floor(b.x + BALL_R); tx++) {
-        if (!this.isWall(tx, ty)) continue;
-        let dx = b.x - clamp(b.x, tx, tx + 1);
-        let dy = b.y - clamp(b.y, ty, ty + 1);
-        let d = Math.hypot(dx, dy);
-        if (d >= BALL_R) continue;
-        if (d < 1e-6) {
-          // 中心がかべの中に入ってしまったときは、いちばん近い面から外へ出す
-          const left = b.x - tx;
-          const right = tx + 1 - b.x;
-          const top = b.y - ty;
-          const bottom = ty + 1 - b.y;
-          const m = Math.min(left, right, top, bottom);
-          dx = m === left ? -1 : m === right ? 1 : 0;
-          dy = m === top ? -1 : m === bottom ? 1 : 0;
-          if (dx && dy) dy = 0;
-          b.x += dx * (m + BALL_R);
-          b.y += dy * (m + BALL_R);
-          d = 1;
-        } else {
-          dx /= d;
-          dy /= d;
-          b.x += dx * (BALL_R - d);
-          b.y += dy * (BALL_R - d);
-        }
-        const vn = b.vx * dx + b.vy * dy;
-        if (vn < 0) {
-          b.vx -= (1 + BOUNCE) * vn * dx;
-          b.vy -= (1 + BOUNCE) * vn * dy;
-          hit = Math.max(hit, -vn);
-        }
-      }
-    }
-    return hit;
-  }
-
   respawn() {
     const b = this.ball;
     b.x = this.start.x;
@@ -256,8 +212,8 @@ export class Game {
     const got = {};
     const total = {};
     for (const it of this.items) {
-      total[it.type] = (total[it.type] || 0) + 1;
-      if (it.taken) got[it.type] = (got[it.type] || 0) + 1;
+      total[it.type] = (total[it.type] || 0) + ITEM_AMOUNT[it.type];
+      if (it.taken) got[it.type] = (got[it.type] || 0) + ITEM_AMOUNT[it.type];
     }
     return { index: this.index, got, total, all: this.items.every((it) => it.taken) };
   }
@@ -378,7 +334,7 @@ export class Game {
       ctx.drawImage(itemSprites[it.type], X(it.x) - s / 2, Y(it.y + bob - 0.06) - s / 2, s, s);
     }
 
-    this.drawBall(ctx, X(this.ball.x), Y(this.ball.y), BALL_R * t * this.ball.scale);
+    drawBall(ctx, X(this.ball.x), Y(this.ball.y), BALL_R * t * this.ball.scale, this.ball, this.time);
 
     for (const p of this.particles) {
       ctx.globalAlpha = Math.min(1, (p.life / p.max) * 2);
@@ -435,59 +391,6 @@ export class Game {
       ctx.rotate(Math.PI / 4);
       ctx.fillRect(-s / 2, -s / 2, s, s);
       ctx.restore();
-    }
-  }
-
-  drawBall(ctx, x, y, r) {
-    const b = this.ball;
-    if (r < 0.5) return;
-    if (b.blink > 0 && Math.floor(b.blink * 10) % 2 === 0) return;
-
-    ctx.fillStyle = 'rgba(0,0,0,.25)';
-    ctx.beginPath();
-    ctx.ellipse(x + r * 0.2, y + r * 0.78, r * 0.85, r * 0.35, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
-    g.addColorStop(0, '#fff6c8');
-    g.addColorStop(0.45, '#ffc93c');
-    g.addColorStop(1, '#e08a00');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 進む方向を見る目
-    const sp = Math.hypot(b.vx, b.vy);
-    const look = Math.min(1, sp / 3);
-    const lx = sp > 0.01 ? (b.vx / sp) * look : 0;
-    const ly = sp > 0.01 ? (b.vy / sp) * look : 0;
-    const ex = x + lx * r * 0.25;
-    const ey = y - r * 0.12 + ly * r * 0.2;
-    const closed = this.time % 3.2 < 0.12;
-    for (const side of [-1, 1]) {
-      const cx = ex + side * r * 0.3;
-      if (closed) {
-        ctx.strokeStyle = '#3b2a17';
-        ctx.lineWidth = r * 0.08;
-        ctx.beginPath();
-        ctx.moveTo(cx - r * 0.1, ey);
-        ctx.lineTo(cx + r * 0.1, ey);
-        ctx.stroke();
-      } else {
-        ctx.fillStyle = '#3b2a17';
-        ctx.beginPath();
-        ctx.ellipse(cx, ey, r * 0.1, r * 0.15, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.arc(cx - r * 0.03, ey - r * 0.06, r * 0.04, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.fillStyle = 'rgba(255,120,120,.55)';
-      ctx.beginPath();
-      ctx.ellipse(ex + side * r * 0.55, ey + r * 0.25, r * 0.13, r * 0.08, 0, 0, Math.PI * 2);
-      ctx.fill();
     }
   }
 
