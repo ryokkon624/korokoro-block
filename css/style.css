@@ -11,6 +11,7 @@ body {
   background: #3a2a1c;
   font-family: var(--font);
   touch-action: none;
+  overscroll-behavior: none;
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -20,6 +21,7 @@ canvas {
   display: block;
   position: fixed;
   inset: 0;
+  touch-action: none; /* touch-action は子に引きつがれないので、キャンバスにも指定する */
 }
 
 .screen {
