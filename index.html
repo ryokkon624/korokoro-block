@@ -9,7 +9,18 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css">
+<script>
+  // GitHub Pages は JS/CSS を10分キャッシュさせるので、更新直後に古いファイルが混ざらないよう毎回読みなおす。
+  // js/ にファイルを増やしたら FILES にも足すこと
+  (() => {
+    const FILES = ['main', 'game', 'stages', 'art', 'sensor', 'sound', 'save'];
+    const v = Date.now();
+    const imports = {};
+    for (const f of FILES) imports[new URL(`js/${f}.js`, location.href).href] = `./js/${f}.js?v=${v}`;
+    document.write(`<link rel="stylesheet" href="css/style.css?v=${v}">`);
+    document.write(`<script type="importmap">${JSON.stringify({ imports })}<\/script>`);
+  })();
+</script>
 </head>
 <body>
 <canvas id="cv"></canvas>
@@ -38,6 +49,7 @@
 
 <button id="bBack" class="hidden">◀ もどる</button>
 
-<script type="module" src="js/main.js"></script>
+<!-- import map を通すため src ではなく import で読む -->
+<script type="module">import './js/main.js';</script>
 </body>
 </html>
