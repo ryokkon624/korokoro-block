@@ -65,7 +65,7 @@ function sprite(rows, palette) {
 }
 
 export const ITEM_ORDER = ['wood', 'stone', 'flower', 'gem'];
-export const ITEM_NAMES = { wood: 'き', stone: 'いし', flower: 'はな', gem: 'ほうせき' };
+export const ITEM_NAMES = { wood: '木', stone: '石', flower: '花', gem: 'ほうせき' };
 export const ITEM_COLORS = { wood: '#e0b97a', stone: '#c3c9cd', flower: '#ff6fa3', gem: '#4fe0ee' };
 
 export const itemSprites = {

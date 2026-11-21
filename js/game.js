@@ -7,7 +7,7 @@ import { sfx, buzz } from './sound.js';
 
 const BALL_R = 0.36;
 const ACCEL = 40; // いっぱいに傾けたときの加速（マス/秒²）。テストページで「ちょうどいい」だった感度
-const KEEP = { grass: 0.5, ice: 0.75 }; // 1秒あたりに残る速さ（こおりは すべる）
+const KEEP = { grass: 0.5, ice: 0.85 }; // 1秒あたりに残る速さ（こおりは すべる）
 const MAX_SPEED = 14;
 const BOUNCE = 0.4;
 const HUD = 0.9; // 上の表示のたかさ（マス）
