@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#5a9e4b">
+<title>かたむきテスト</title>
+<style>
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; background: #5a9e4b;
+    font-family: system-ui, sans-serif;
+    touch-action: none; user-select: none; -webkit-user-select: none;
+  }
+  canvas { display: block; }
+  #info {
+    position: fixed; left: 8px; bottom: 8px; background: rgba(0,0,0,.65); color: #fff;
+    font: 13px/1.45 ui-monospace, monospace; padding: 8px 10px; border-radius: 8px;
+    white-space: pre; pointer-events: none;
+  }
+  #panel { position: fixed; right: 8px; top: 8px; display: flex; flex-direction: column; gap: 6px; }
+  #panel button {
+    font-size: 15px; padding: 8px 12px; border-radius: 8px; border: none;
+    background: rgba(255,255,255,.9); color: #222;
+  }
+  #start {
+    position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 20px; background: rgba(0,0,0,.45);
+  }
+  #start button {
+    font-size: 44px; font-weight: bold; padding: 22px 56px; border-radius: 24px; border: none;
+    background: #ffd23f; color: #5a3b00; box-shadow: 0 8px 0 #c99a00;
+  }
+  #start button:active { transform: translateY(6px); box-shadow: 0 2px 0 #c99a00; }
+  #start p { color: #fff; font-size: 22px; margin: 0; text-align: center; text-shadow: 0 2px 4px rgba(0,0,0,.5); }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="info"></div>
+<div id="panel">
+  <button id="bMode">センサー: じどう</button>
+  <button id="bFlipX">よこ はんてん</button>
+  <button id="bFlipY">たて はんてん</button>
+  <button id="bSwap">たてよこ いれかえ</button>
+  <button id="bSens">かんど: 1.0</button>
+  <button id="bInfo">すうじ かくす</button>
+</div>
+<div id="start">
+  <button id="bStart">はじめる</button>
+  <p>タブレットを かたむけて<br>ボールを あなに いれよう</p>
+</div>
+<script>
+'use strict';
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const infoEl = document.getElementById('info');
+let W = 0, H = 0;
+let bg = null;
+
+const S = {
+  motion: null, orient: null, pointer: null,
+  motionCount: 0, orientCount: 0,
+  mode: 'auto', flipX: false, flipY: false, swap: false, sens: 1.0,
+  showInfo: true, started: false, startedAt: 0, locked: null,
+  score: 0, src: 'none', cheer: 0,
+};
+
+const ball = { x: 0, y: 0, vx: 0, vy: 0, r: 20, sinking: 0 };
+const hole = { x: 0, y: 0, r: 30 };
+
+const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+
+// ---------- 画面サイズ ----------
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  W = innerWidth; H = innerHeight;
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const m = Math.min(W, H);
+  ball.r = m * 0.045;
+  hole.r = m * 0.075;
+  bg = makeBackground(dpr);
+  if (!ball.x) { ball.x = W / 2; ball.y = H / 2; placeHole(); }
+  ball.x = clamp(ball.x, ball.r, W - ball.r);
+  ball.y = clamp(ball.y, ball.r, H - ball.r);
+  hole.x = clamp(hole.x, hole.r, W - hole.r);
+  hole.y = clamp(hole.y, hole.r, H - hole.r);
+}
+
+// ブロックっぽい草の地面
+function makeBackground(dpr) {
+  const c = document.createElement('canvas');
+  c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
+  const g = c.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const tile = Math.max(40, Math.round(Math.min(W, H) / 9));
+  const px = tile / 8;
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const shades = ['#5fa84f', '#68b357', '#579c47', '#71bb5f'];
+  for (let ty = 0; ty < H; ty += tile) {
+    for (let tx = 0; tx < W; tx += tile) {
+      for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+          g.fillStyle = shades[Math.floor(rnd() * shades.length)];
+          g.fillRect(tx + x * px, ty + y * px, px + 0.5, px + 0.5);
+        }
+      }
+      g.strokeStyle = 'rgba(0,0,0,.08)';
+      g.strokeRect(tx + 0.5, ty + 0.5, tile - 1, tile - 1);
+    }
+  }
+  return c;
+}
+
+function placeHole() {
+  const m = Math.min(W, H);
+  const pad = hole.r + 10;
+  for (let i = 0; i < 50; i++) {
+    hole.x = pad + Math.random() * (W - pad * 2);
+    hole.y = pad + Math.random() * (H - pad * 2);
+    if (Math.hypot(hole.x - ball.x, hole.y - ball.y) > m * 0.4) break;
+  }
+}
+
+// ---------- センサー ----------
+addEventListener('devicemotion', (e) => {
+  const a = e.accelerationIncludingGravity;
+  if (a && a.x != null && a.y != null) {
+    S.motion = { x: a.x, y: a.y, z: a.z };
+    S.motionCount++;
+  }
+});
+addEventListener('deviceorientation', (e) => {
+  if (e.beta != null && e.gamma != null) {
+    S.orient = { a: e.alpha, b: e.beta, g: e.gamma };
+    S.orientCount++;
+  }
+});
+
+// PCでの確認用: ドラッグした方向にかたむける
+cv.addEventListener('pointerdown', onPointer);
+cv.addEventListener('pointermove', (e) => { if (e.buttons || e.pointerType === 'touch') onPointer(e); });
+cv.addEventListener('pointerup', () => { S.pointer = null; });
+cv.addEventListener('pointercancel', () => { S.pointer = null; });
+function onPointer(e) {
+  const m = Math.min(W, H) / 2;
+  S.pointer = { x: (e.clientX - W / 2) / m, y: (e.clientY - H / 2) / m };
+}
+
+function screenAngle() {
+  if (screen.orientation && typeof screen.orientation.angle === 'number') return screen.orientation.angle;
+  if (typeof window.orientation === 'number') return window.orientation;
+  return 0;
+}
+
+// ボールが転がる向き（画面座標、-1〜1くらい）
+function tilt() {
+  let dx, dy, src;
+  // 端末の座標: x=右, y=上
+  if ((S.mode === 'auto' || S.mode === 'motion') && S.motion) {
+    dx = -S.motion.x / 9.81;
+    dy = -S.motion.y / 9.81;
+    src = 'motion';
+  } else if ((S.mode === 'auto' || S.mode === 'orient') && S.orient) {
+    const r = Math.PI / 180;
+    dx = Math.sin(S.orient.g * r);
+    dy = -Math.sin(S.orient.b * r);
+    src = 'orient';
+  } else if (S.pointer) {
+    S.src = 'touch';
+    return { x: S.pointer.x, y: S.pointer.y };
+  } else {
+    S.src = 'none';
+    return { x: 0, y: 0 };
+  }
+  // 画面の回転にあわせる
+  const t = screenAngle() * Math.PI / 180;
+  const sx = dx * Math.cos(t) - dy * Math.sin(t);
+  const sy = dx * Math.sin(t) + dy * Math.cos(t);
+  let x = sx, y = -sy;
+  if (S.swap) [x, y] = [y, x];
+  if (S.flipX) x = -x;
+  if (S.flipY) y = -y;
+  const len = Math.hypot(x, y);
+  if (len > 1) { x /= len; y /= len; }
+  S.src = src;
+  return { x, y };
+}
+
+// ---------- おと ----------
+let ac = null;
+function tone(freq, start, dur, vol, type) {
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, start);
+  g.gain.exponentialRampToValueAtTime(vol, start + 0.015);
+  g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+  o.connect(g).connect(ac.destination);
+  o.start(start); o.stop(start + dur + 0.02);
+}
+function soundGoal() {
+  if (!ac) return;
+  const t = ac.currentTime;
+  [523, 659, 784, 1047].forEach((f, i) => tone(f, t + i * 0.08, 0.3, 0.25, 'triangle'));
+}
+function soundBump(power) {
+  if (!ac) return;
+  tone(160, ac.currentTime, 0.08, Math.min(0.3, power), 'square');
+}
+
+// ---------- うごき ----------
+function update(dt) {
+  if (!S.started) return;
+  const m = Math.min(W, H);
+
+  if (ball.sinking > 0) {
+    ball.sinking -= dt;
+    ball.x += (hole.x - ball.x) * Math.min(1, dt * 12);
+    ball.y += (hole.y - ball.y) * Math.min(1, dt * 12);
+    if (ball.sinking <= 0) {
+      S.score++; S.cheer = 1.5;
+      soundGoal();
+      if (navigator.vibrate) navigator.vibrate(120);
+      ball.vx = ball.vy = 0;
+      placeHole();
+    }
+    return;
+  }
+
+  const t = tilt();
+  const accel = m * 4.0 * S.sens;
+  ball.vx += t.x * accel * dt;
+  ball.vy += t.y * accel * dt;
+
+  // あなの近くでは すいこまれる
+  const hx = hole.x - ball.x, hy = hole.y - ball.y;
+  const hd = Math.hypot(hx, hy);
+  if (hd < hole.r) {
+    ball.vx += hx * 18 * dt;
+    ball.vy += hy * 18 * dt;
+  }
+
+  const friction = Math.pow(0.5, dt);
+  ball.vx *= friction; ball.vy *= friction;
+  ball.x += ball.vx * dt;
+  ball.y += ball.vy * dt;
+
+  const bounce = 0.45;
+  let hit = 0;
+  if (ball.x < ball.r) { ball.x = ball.r; hit = Math.abs(ball.vx); ball.vx = -ball.vx * bounce; }
+  if (ball.x > W - ball.r) { ball.x = W - ball.r; hit = Math.abs(ball.vx); ball.vx = -ball.vx * bounce; }
+  if (ball.y < ball.r) { ball.y = ball.r; hit = Math.max(hit, Math.abs(ball.vy)); ball.vy = -ball.vy * bounce; }
+  if (ball.y > H - ball.r) { ball.y = H - ball.r; hit = Math.max(hit, Math.abs(ball.vy)); ball.vy = -ball.vy * bounce; }
+  if (hit > m * 0.25) soundBump(hit / (m * 4));
+
+  if (Math.hypot(hole.x - ball.x, hole.y - ball.y) < hole.r * 0.55) ball.sinking = 0.35;
+}
+
+// ---------- えがく ----------
+function draw(dt) {
+  ctx.drawImage(bg, 0, 0, W, H);
+
+  // あな
+  const hg = ctx.createRadialGradient(hole.x, hole.y - hole.r * 0.2, hole.r * 0.1, hole.x, hole.y, hole.r);
+  hg.addColorStop(0, '#000');
+  hg.addColorStop(0.75, '#1a120b');
+  hg.addColorStop(1, '#4a3520');
+  ctx.fillStyle = hg;
+  ctx.beginPath(); ctx.arc(hole.x, hole.y, hole.r, 0, Math.PI * 2); ctx.fill();
+  ctx.lineWidth = Math.max(3, hole.r * 0.12);
+  ctx.strokeStyle = '#7a5a36';
+  ctx.stroke();
+
+  // ボール
+  const scale = ball.sinking > 0 ? Math.max(0.3, ball.sinking / 0.35) : 1;
+  const r = ball.r * scale;
+  if (ball.sinking <= 0) {
+    ctx.fillStyle = 'rgba(0,0,0,.25)';
+    ctx.beginPath(); ctx.ellipse(ball.x + r * 0.25, ball.y + r * 0.35, r, r * 0.9, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  const bgr = ctx.createRadialGradient(ball.x - r * 0.35, ball.y - r * 0.4, r * 0.1, ball.x, ball.y, r);
+  bgr.addColorStop(0, '#fff6c8');
+  bgr.addColorStop(0.45, '#ffc93c');
+  bgr.addColorStop(1, '#e08a00');
+  ctx.fillStyle = bgr;
+  ctx.beginPath(); ctx.arc(ball.x, ball.y, r, 0, Math.PI * 2); ctx.fill();
+
+  // かたむきの矢印（左上）
+  const t = tilt();
+  const cx = 60, cy = 60, cr = 44;
+  ctx.fillStyle = 'rgba(255,255,255,.35)';
+  ctx.beginPath(); ctx.arc(cx, cy, cr, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#d33';
+  ctx.beginPath(); ctx.arc(cx + t.x * cr, cy + t.y * cr, 9, 0, Math.PI * 2); ctx.fill();
+
+  // スコア
+  ctx.fillStyle = '#fff';
+  ctx.strokeStyle = 'rgba(0,0,0,.45)';
+  ctx.lineWidth = 6;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.font = `bold ${Math.round(Math.min(W, H) * 0.06)}px system-ui, sans-serif`;
+  const label = `はいった: ${S.score}`;
+  ctx.strokeText(label, W / 2, 14);
+  ctx.fillText(label, W / 2, 14);
+
+  if (S.cheer > 0) {
+    S.cheer -= dt;
+    const a = Math.min(1, S.cheer);
+    ctx.globalAlpha = a;
+    ctx.font = `bold ${Math.round(Math.min(W, H) * 0.12)}px system-ui, sans-serif`;
+    ctx.textBaseline = 'middle';
+    const y = H / 2 - (1.5 - S.cheer) * 30;
+    ctx.strokeText('やったね！', W / 2, y);
+    ctx.fillStyle = '#ffe14a';
+    ctx.fillText('やったね！', W / 2, y);
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ---------- じょうほう ----------
+const f1 = (v) => (v == null ? '-' : (v >= 0 ? ' ' : '') + v.toFixed(1));
+function updateInfo() {
+  if (!S.showInfo) { infoEl.style.display = 'none'; return; }
+  infoEl.style.display = '';
+  const m = S.motion, o = S.orient;
+  const lines = [
+    `HTTPS(secure): ${window.isSecureContext}`,
+    `加速度 motion: ${S.motionCount}回  x=${f1(m && m.x)} y=${f1(m && m.y)} z=${f1(m && m.z)}`,
+    `傾き orientation: ${S.orientCount}回  β=${f1(o && o.b)} γ=${f1(o && o.g)}`,
+    `画面の回転: ${screenAngle()}°  ${screen.orientation ? screen.orientation.type : ''}`,
+    `画面固定: ${S.locked == null ? '-' : S.locked ? 'できた' : 'できない(回転ロックしてね)'}`,
+    `使っているもの: ${S.src}`,
+  ];
+  if (S.started && performance.now() - S.startedAt > 2000 && !S.motionCount && !S.orientCount) {
+    lines.push('⚠ センサーの値が来ていません');
+  }
+  infoEl.textContent = lines.join('\n');
+}
+setInterval(updateInfo, 100);
+
+// ---------- ボタン ----------
+const modeLabels = { auto: 'じどう', motion: '加速度', orient: '傾き' };
+document.getElementById('bMode').onclick = (e) => {
+  S.mode = S.mode === 'auto' ? 'motion' : S.mode === 'motion' ? 'orient' : 'auto';
+  e.target.textContent = `センサー: ${modeLabels[S.mode]}`;
+};
+const toggle = (id, key, label) => {
+  document.getElementById(id).onclick = (e) => {
+    S[key] = !S[key];
+    e.target.textContent = label + (S[key] ? ' ✓' : '');
+  };
+};
+toggle('bFlipX', 'flipX', 'よこ はんてん');
+toggle('bFlipY', 'flipY', 'たて はんてん');
+toggle('bSwap', 'swap', 'たてよこ いれかえ');
+document.getElementById('bSens').onclick = (e) => {
+  const list = [0.5, 0.75, 1.0, 1.5, 2.0];
+  S.sens = list[(list.indexOf(S.sens) + 1) % list.length];
+  e.target.textContent = `かんど: ${S.sens.toFixed(2).replace(/0$/, '')}`;
+};
+document.getElementById('bInfo').onclick = (e) => {
+  S.showInfo = !S.showInfo;
+  e.target.textContent = S.showInfo ? 'すうじ かくす' : 'すうじ だす';
+};
+
+document.getElementById('bStart').onclick = async () => {
+  try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) { ac = null; }
+  // iPad/iPhone 用（Androidでは何もしない）
+  for (const Ev of [window.DeviceMotionEvent, window.DeviceOrientationEvent]) {
+    if (Ev && typeof Ev.requestPermission === 'function') {
+      try { await Ev.requestPermission(); } catch (_) {}
+    }
+  }
+  try {
+    await document.documentElement.requestFullscreen();
+    await screen.orientation.lock('landscape');
+    S.locked = true;
+  } catch (_) {
+    S.locked = false;
+  }
+  document.getElementById('start').style.display = 'none';
+  S.started = true;
+  S.startedAt = performance.now();
+};
+
+// ---------- ループ ----------
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.033, (now - last) / 1000);
+  last = now;
+  update(dt);
+  draw(dt);
+  requestAnimationFrame(loop);
+}
+addEventListener('resize', resize);
+resize();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
