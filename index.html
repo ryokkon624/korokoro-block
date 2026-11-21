@@ -13,7 +13,7 @@
   // GitHub Pages は JS/CSS を10分キャッシュさせるので、更新直後に古いファイルが混ざらないよう毎回読みなおす。
   // js/ にファイルを増やしたら FILES にも足すこと
   (() => {
-    const FILES = ['main', 'game', 'stages', 'art', 'sensor', 'sound', 'save'];
+    const FILES = ['main', 'game', 'house', 'physics', 'stages', 'art', 'sensor', 'sound', 'save'];
     const v = Date.now();
     const imports = {};
     for (const f of FILES) imports[new URL(`js/${f}.js`, location.href).href] = `./js/${f}.js?v=${v}`;
@@ -34,6 +34,7 @@
   <h2>どこで あそぶ？</h2>
   <div id="stageList"></div>
   <div id="inventory"></div>
+  <button id="bHouse" class="btn go">🏠 おうちを つくる</button>
 </div>
 
 <div id="clear" class="screen hidden">
@@ -45,6 +46,15 @@
     <button id="bNext" class="btn go">つぎへ ▶</button>
   </div>
   <button id="bToSelect" class="btn">ステージを えらぶ</button>
+</div>
+
+<div id="palette" class="hidden"></div>
+
+<div id="gift" class="screen hidden">
+  <h2>はじめての おうちづくり！</h2>
+  <p class="note">プレゼントだよ</p>
+  <div id="giftItems"></div>
+  <button id="bGiftOk" class="big">やったー！</button>
 </div>
 
 <button id="bBack" class="hidden">◀ もどる</button>

@@ -1,0 +1,345 @@
+// おうちづくり（横から見た世界に、あつめた素材でブロックをおく）
+// ころんは 左右に傾けると転がる（重力あり）
+
+import { tileTex, itemSprites, houseSprites, ITEM_NAMES, FONT, hash, drawBall } from './art.js';
+import { collideCircle } from './physics.js';
+import { sfx } from './sound.js';
+
+export const COLS = 20;
+export const ROWS = 9;
+const TOP = 0.9; // 上の表示のたかさ（マス）
+const GROUND = 1;
+const PALETTE = 1.9; // 下のボタンのならびのたかさ（マス）
+
+const BALL_R = 0.36;
+const GRAVITY = 30;
+const ACCEL = 30;
+const KEEP = 0.6;
+const BOUNCE = 0.15;
+const MAX_SPEED = 12;
+
+// ブロック: 文字 → 情報（ドアと花は通りぬけられる）
+export const BLOCKS = {
+  w: { material: 'wood', solid: true },
+  s: { material: 'stone', solid: true },
+  d: { material: 'wood', solid: false },
+  m: { material: 'stone', solid: true },
+  y: { material: 'wood', solid: true },
+  f: { material: 'flower', solid: false },
+  g: { material: 'gem', solid: true },
+};
+export const BLOCK_ORDER = ['w', 's', 'd', 'm', 'y', 'f', 'g'];
+
+const blankRows = () => Array.from({ length: ROWS }, () => '.'.repeat(COLS));
+
+// やねの形: となりにやねがあるかで きめる
+function roofPath(g, x, y, t, left, right) {
+  g.beginPath();
+  if (left && right) {
+    g.rect(x, y, t, t);
+  } else if (right) {
+    g.moveTo(x, y + t);
+    g.lineTo(x + t, y);
+    g.lineTo(x + t, y + t);
+  } else if (left) {
+    g.moveTo(x, y);
+    g.lineTo(x + t, y + t);
+    g.lineTo(x, y + t);
+  } else {
+    g.moveTo(x, y + t);
+    g.lineTo(x + t / 2, y);
+    g.lineTo(x + t, y + t);
+  }
+  g.closePath();
+}
+
+// ブロックを1つえがく（left/right は やねの形のため）
+function drawBlock(g, code, x, y, t, variant, left = false, right = false) {
+  g.imageSmoothingEnabled = false;
+  if (code === 'w') g.drawImage(tileTex.plank[variant], x, y, t, t);
+  else if (code === 's') g.drawImage(tileTex.bricks[variant], x, y, t, t);
+  else if (code === 'd') g.drawImage(houseSprites.door, x, y, t, t);
+  else if (code === 'm') g.drawImage(houseSprites.window, x, y, t, t);
+  else if (code === 'g') g.drawImage(houseSprites.gem, x, y, t, t);
+  else if (code === 'f') g.drawImage(itemSprites.flower, x, y, t, t);
+  else if (code === 'y') {
+    g.save();
+    roofPath(g, x, y, t, left, right);
+    g.clip();
+    g.drawImage(tileTex.roof[variant], x, y, t, t);
+    g.restore();
+    roofPath(g, x, y, t, left, right);
+    g.strokeStyle = 'rgba(80,20,15,.6)';
+    g.lineWidth = t * 0.05;
+    g.stroke();
+  }
+}
+
+// パレットのボタン用の絵
+export function blockIconURL(code, size = 48) {
+  const c = document.createElement('canvas');
+  c.width = size;
+  c.height = size;
+  drawBlock(c.getContext('2d'), code, 0, 0, size, 0);
+  return c.toDataURL();
+}
+
+export class House {
+  constructor() {
+    this.W = 0;
+    this.H = 0;
+    this.time = 0;
+    this.items = { wood: 0, stone: 0, flower: 0, gem: 0 };
+    this.selected = 'w';
+    this.onChange = null; // ブロックをおいた・けしたときに呼ぶ（セーブ用）
+    this.stroke = null;
+    this.toast = null;
+    this.setup(null, this.items);
+  }
+
+  // rows: セーブした家（なければ空き地）、items: 素材の数（そのまま増やしたり減らしたりする）
+  setup(rows, items) {
+    const ok = Array.isArray(rows) && rows.length === ROWS && rows.every((r) => r.length === COLS);
+    this.grid = (ok ? rows : blankRows()).map((r) => r.split(''));
+    this.items = items;
+    this.toast = null;
+    // ころんは 地面の 左のほうの あいているところに
+    let x = 0;
+    while (x < COLS - 1 && this.isSolid(x, ROWS - 1)) x++;
+    this.ball = { x: x + 0.5, y: ROWS - BALL_R, vx: 0, vy: 0, blink: 0 };
+  }
+
+  rows() {
+    return this.grid.map((r) => r.join(''));
+  }
+
+  resize(W, H) {
+    this.W = W;
+    this.H = H;
+    const t = Math.floor(Math.min(W / COLS, H / (TOP + ROWS + GROUND + PALETTE)));
+    this.tile = t;
+    this.ox = Math.floor((W - COLS * t) / 2);
+    this.oy = Math.floor((H - (TOP + ROWS + GROUND + PALETTE) * t) / 2 + TOP * t);
+  }
+
+  // 下のボタンをならべる場所（HTML 側で使う）
+  paletteRect() {
+    const t = this.tile;
+    return { x: this.ox, y: this.oy + (ROWS + GROUND) * t, w: COLS * t, h: PALETTE * t, t };
+  }
+
+  isSolid(x, y) {
+    if (x < 0 || x >= COLS || y >= ROWS) return true;
+    if (y < 0) return false;
+    const b = BLOCKS[this.grid[y][x]];
+    return !!(b && b.solid);
+  }
+
+  // ---------- うごき ----------
+  update(dt, tilt) {
+    this.time += dt;
+    if (this.toast && (this.toast.life -= dt) <= 0) this.toast = null;
+
+    const b = this.ball;
+    b.vx += tilt.x * ACCEL * dt;
+    b.vy += GRAVITY * dt;
+    b.vx *= Math.pow(KEEP, dt);
+    const sp = Math.hypot(b.vx, b.vy);
+    if (sp > MAX_SPEED) {
+      b.vx *= MAX_SPEED / sp;
+      b.vy *= MAX_SPEED / sp;
+    }
+    const n = Math.max(1, Math.ceil((Math.min(sp, MAX_SPEED) * dt) / (BALL_R * 0.4)));
+    for (let i = 0; i < n; i++) {
+      b.x += (b.vx * dt) / n;
+      b.y += (b.vy * dt) / n;
+      collideCircle(b, BALL_R, (x, y) => this.isSolid(x, y), BOUNCE);
+    }
+  }
+
+  // ---------- さわる ----------
+  cellAt(px, py) {
+    const x = Math.floor((px - this.ox) / this.tile);
+    const y = Math.floor((py - this.oy) / this.tile);
+    if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return null;
+    return { x, y };
+  }
+
+  // さいしょにさわったマスが あいていれば「おく」、ブロックがあれば「けす」で なぞっていく
+  pointerDown(px, py) {
+    const c = this.cellAt(px, py);
+    if (!c) return;
+    this.stroke = { mode: this.grid[c.y][c.x] === '.' ? 'place' : 'erase', last: null, warned: false };
+    this.apply(c);
+  }
+
+  pointerMove(px, py) {
+    if (!this.stroke) return;
+    const c = this.cellAt(px, py);
+    if (!c) return;
+    const from = this.stroke.last;
+    if (!from) {
+      this.apply(c);
+      return;
+    }
+    // 指が速く動いても マスをとばさないように、前のマスとのあいだを うめる
+    const n = Math.max(Math.abs(c.x - from.x), Math.abs(c.y - from.y));
+    for (let i = 1; i <= n; i++) {
+      this.apply({
+        x: Math.round(from.x + ((c.x - from.x) * i) / n),
+        y: Math.round(from.y + ((c.y - from.y) * i) / n),
+      });
+    }
+  }
+
+  pointerUp() {
+    this.stroke = null;
+  }
+
+  apply(c) {
+    const s = this.stroke;
+    if (s.last && s.last.x === c.x && s.last.y === c.y) return;
+    s.last = c;
+    const cur = this.grid[c.y][c.x];
+
+    if (s.mode === 'erase') {
+      if (cur === '.') return;
+      this.grid[c.y][c.x] = '.';
+      this.items[BLOCKS[cur].material]++;
+      sfx.erase();
+      if (this.onChange) this.onChange();
+      return;
+    }
+
+    if (cur !== '.') return;
+    const block = BLOCKS[this.selected];
+    if (this.items[block.material] <= 0) {
+      if (!s.warned) {
+        s.warned = true;
+        sfx.lack();
+        this.toast = { text: `${ITEM_NAMES[block.material]}が たりないよ！ ステージで あつめよう`, life: 2 };
+      }
+      return;
+    }
+    // ころんが うまらないように
+    if (block.solid && this.touchesBall(c.x, c.y)) return;
+    this.grid[c.y][c.x] = this.selected;
+    this.items[block.material]--;
+    sfx.place();
+    if (this.onChange) this.onChange();
+  }
+
+  touchesBall(x, y) {
+    const b = this.ball;
+    const dx = b.x - Math.min(Math.max(b.x, x), x + 1);
+    const dy = b.y - Math.min(Math.max(b.y, y), y + 1);
+    return Math.hypot(dx, dy) < BALL_R;
+  }
+
+  // ---------- えがく ----------
+  render(ctx) {
+    const { W, H, tile: t, ox, oy } = this;
+
+    const sky = ctx.createLinearGradient(0, 0, 0, oy + ROWS * t);
+    sky.addColorStop(0, '#79c8f2');
+    sky.addColorStop(1, '#d9f2ff');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
+    this.drawClouds(ctx);
+
+    // マス目のめやす
+    ctx.strokeStyle = 'rgba(255,255,255,.35)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = 0; x <= COLS; x++) {
+      ctx.moveTo(ox + x * t + 0.5, oy);
+      ctx.lineTo(ox + x * t + 0.5, oy + ROWS * t);
+    }
+    for (let y = 0; y <= ROWS; y++) {
+      ctx.moveTo(ox, oy + y * t + 0.5);
+      ctx.lineTo(ox + COLS * t, oy + y * t + 0.5);
+    }
+    ctx.stroke();
+
+    // 地面（画面のはしから はしまで）
+    ctx.imageSmoothingEnabled = false;
+    const gy = oy + ROWS * t;
+    for (let x = Math.floor(-ox / t) - 1; x * t + ox < W; x++) {
+      const v = hash(x + 50, 0) % 4;
+      ctx.drawImage(tileTex.grassSide[v], ox + x * t, gy, t, t);
+      for (let y = 1; gy + y * t < H; y++) ctx.drawImage(tileTex.dirt[hash(x + 50, y) % 4], ox + x * t, gy + y * t, t, t);
+    }
+
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        const code = this.grid[y][x];
+        if (code === '.') continue;
+        const left = this.grid[y][x - 1] === 'y';
+        const right = this.grid[y][x + 1] === 'y';
+        drawBlock(ctx, code, ox + x * t, oy + y * t, t, hash(x, y) % 4, left, right);
+        if (code === 'g') this.drawTwinkle(ctx, x, y);
+      }
+    }
+
+    const b = this.ball;
+    drawBall(ctx, ox + b.x * t, oy + b.y * t, BALL_R * t, b, this.time);
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `800 ${Math.round(TOP * t * 0.48)}px ${FONT}`;
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = 'rgba(59,42,23,.6)';
+    ctx.lineWidth = t * 0.08;
+    ctx.lineJoin = 'round';
+    ctx.strokeText('おうちづくり', W / 2, oy - (TOP * t) / 2);
+    ctx.fillText('おうちづくり', W / 2, oy - (TOP * t) / 2);
+
+    if (this.toast) this.drawToast(ctx);
+  }
+
+  drawClouds(ctx) {
+    const t = this.tile;
+    const span = this.W + t * 6;
+    ctx.fillStyle = 'rgba(255,255,255,.9)';
+    [
+      [0.4, 0.8, 0.1],
+      [3.5, 2.0, 0.06],
+      [11, 1.2, 0.08],
+    ].forEach(([x0, y, speed]) => {
+      const x = ((x0 * t + this.time * speed * t) % span) - t * 3;
+      const cy = this.oy + y * t;
+      ctx.fillRect(x, cy, t * 2.2, t * 0.5);
+      ctx.fillRect(x + t * 0.4, cy - t * 0.3, t * 1.2, t * 0.4);
+    });
+  }
+
+  drawTwinkle(ctx, x, y) {
+    const phase = (this.time + (hash(x, y) % 100) / 37) % 2.2;
+    if (phase > 0.5) return;
+    const t = this.tile;
+    const s = Math.sin((phase / 0.5) * Math.PI) * t * 0.22;
+    ctx.save();
+    ctx.translate(this.ox + (x + 0.7) * t, this.oy + (y + 0.3) * t);
+    ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(-s / 2, -s / 2, s, s);
+    ctx.restore();
+  }
+
+  drawToast(ctx) {
+    const t = this.tile;
+    ctx.globalAlpha = Math.min(1, this.toast.life * 3);
+    ctx.font = `800 ${Math.round(t * 0.42)}px ${FONT}`;
+    const w = ctx.measureText(this.toast.text).width + t * 0.8;
+    const h = t * 0.85;
+    const x = this.W / 2 - w / 2;
+    const y = this.oy + t * 0.4;
+    ctx.fillStyle = 'rgba(40,28,16,.85)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, h / 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffe14a';
+    ctx.fillText(this.toast.text, this.W / 2, y + h / 2);
+    ctx.globalAlpha = 1;
+  }
+}

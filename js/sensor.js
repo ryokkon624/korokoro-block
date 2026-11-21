@@ -12,8 +12,16 @@ addEventListener('deviceorientation', (e) => {
 });
 
 // PC での確認用: マウスでドラッグした方向にかたむける（タッチは無視する）
+// おうちづくりではドラッグでブロックをおくので、切っておく
+let mouseTilt = true;
+export function setMouseTilt(on) {
+  mouseTilt = on;
+  if (!on) state.mouse = null;
+}
+
 export function bindMouse(el) {
   const set = (e) => {
+    if (!mouseTilt) return;
     const m = Math.min(innerWidth, innerHeight) / 2;
     state.mouse = { x: (e.clientX - innerWidth / 2) / m, y: (e.clientY - innerHeight / 2) / m };
   };
