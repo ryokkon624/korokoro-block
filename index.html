@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#3a2a1c">
+<title>ころころ ブロックワールド</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div id="title" class="screen">
+  <h1>ころころ<span class="sub">ブロックワールド</span></h1>
+  <button id="bPlay" class="big">あそぶ</button>
+</div>
+
+<div id="select" class="screen hidden">
+  <h2>どこで あそぶ？</h2>
+  <div id="stageList"></div>
+  <div id="inventory"></div>
+</div>
+
+<div id="clear" class="screen hidden">
+  <h2 id="clearTitle">クリア！</h2>
+  <div id="clearItems"></div>
+  <p id="clearNote" class="note"></p>
+  <div class="row">
+    <button id="bRetry" class="btn">もういちど</button>
+    <button id="bNext" class="btn go">つぎへ ▶</button>
+  </div>
+  <button id="bToSelect" class="btn">ステージを えらぶ</button>
+</div>
+
+<button id="bBack" class="hidden">◀ もどる</button>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
