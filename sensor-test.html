@@ -332,7 +332,7 @@ function updateInfo() {
     `加速度 motion: ${S.motionCount}回  x=${f1(m && m.x)} y=${f1(m && m.y)} z=${f1(m && m.z)}`,
     `傾き orientation: ${S.orientCount}回  β=${f1(o && o.b)} γ=${f1(o && o.g)}`,
     `画面の回転: ${screenAngle()}°  ${screen.orientation ? screen.orientation.type : ''}`,
-    `画面固定: ${S.locked == null ? '-' : S.locked ? 'できた' : 'できない(回転ロックしてね)'}`,
+    `画面固定: ${S.locked == null ? '-' : S.locked ? `できた (${S.locked})` : 'できない(回転ロックしてね)'}`,
     `使っているもの: ${S.src}`,
   ];
   if (S.started && performance.now() - S.startedAt > 2000 && !S.motionCount && !S.orientCount) {
@@ -376,9 +376,13 @@ document.getElementById('bStart').onclick = async () => {
     }
   }
   try {
+    // 'landscape' だと左右どちらの横向きにもセンサーで回ってしまう（本体の回転ロックより優先される）ので、
+    // 押した時点の横向きのまま固定する
+    const cur = screen.orientation.type;
+    const target = cur.startsWith('landscape') ? cur : 'landscape-primary';
     await document.documentElement.requestFullscreen();
-    await screen.orientation.lock('landscape');
-    S.locked = true;
+    await screen.orientation.lock(target);
+    S.locked = target;
   } catch (_) {
     S.locked = false;
   }
