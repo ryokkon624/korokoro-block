@@ -1,0 +1,201 @@
+:root {
+  --font: "M PLUS Rounded 1c", system-ui, sans-serif;
+  --ink: #3b2a17;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #3a2a1c;
+  font-family: var(--font);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+canvas {
+  display: block;
+  position: fixed;
+  inset: 0;
+}
+
+.screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3vh;
+  padding: 0 16px;
+  background: rgba(20, 14, 8, 0.55);
+}
+
+.hidden {
+  display: none !important;
+}
+
+h1 {
+  margin: 0;
+  color: #fff;
+  font-size: min(13vw, 17vh);
+  line-height: 1.05;
+  text-align: center;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0.06em 0 var(--ink), 0 0 0.3em rgba(0, 0, 0, 0.4);
+}
+
+h1 .sub {
+  display: block;
+  font-size: 0.55em;
+  color: #ffe14a;
+}
+
+h2 {
+  margin: 0;
+  color: #fff;
+  font-size: min(6vw, 9vh);
+  text-align: center;
+  text-shadow: 0 0.08em 0 var(--ink);
+}
+
+button {
+  font-family: inherit;
+  font-weight: 800;
+  border: none;
+  cursor: pointer;
+}
+
+.big {
+  font-size: min(7vw, 11vh);
+  padding: 0.25em 1.3em;
+  border-radius: 0.5em;
+  background: #ffd23f;
+  color: #5a3b00;
+  box-shadow: 0 0.18em 0 #c99a00;
+}
+
+.btn {
+  font-size: min(4vw, 6.5vh);
+  padding: 0.35em 1em;
+  border-radius: 0.5em;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 0.16em 0 #b9a88f;
+}
+
+.btn.go {
+  background: #7ed957;
+  color: #1f4d10;
+  box-shadow: 0 0.16em 0 #4f9a30;
+}
+
+.big:active,
+.btn:active,
+.stage:active {
+  transform: translateY(0.1em);
+  box-shadow: none;
+}
+
+.row {
+  display: flex;
+  gap: 3vw;
+}
+
+#stageList {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2vw;
+}
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3em;
+  width: min(16vw, 28vh);
+  aspect-ratio: 1;
+  padding: 0.4em;
+  border-radius: 0.35em;
+  background: #6fb35c;
+  color: #fff;
+  font-size: min(2.3vw, 3.8vh);
+  box-shadow: inset 0 -0.4em 0 rgba(0, 0, 0, 0.22), 0 0.2em 0 #2f5a24;
+}
+
+.stage .num {
+  font-size: 3em;
+  line-height: 1;
+  text-shadow: 0 0.06em 0 rgba(0, 0, 0, 0.35);
+}
+
+.stage .name {
+  line-height: 1.25;
+  text-align: center;
+  word-break: keep-all; /* 「くさ／はら」のように途中で折り返さず、スペースで折り返す */
+}
+
+.stage .stars {
+  font-size: 1.5em;
+  color: #ffe14a;
+  letter-spacing: 0.1em;
+  text-shadow: 0 0.06em 0 rgba(0, 0, 0, 0.35);
+}
+
+.stage.locked {
+  background: #7a7a7a;
+  box-shadow: inset 0 -0.4em 0 rgba(0, 0, 0, 0.22), 0 0.2em 0 #444;
+  opacity: 0.85;
+}
+
+#inventory,
+#clearItems {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 2.5vw;
+  color: #fff;
+  font-size: min(3.6vw, 5.5vh);
+  text-shadow: 0 0.08em 0 var(--ink);
+}
+
+.inv {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
+}
+
+.inv img {
+  width: 1.4em;
+  height: 1.4em;
+  image-rendering: pixelated;
+}
+
+.note {
+  margin: 0;
+  color: #ffe14a;
+  font-size: min(3.6vw, 5.5vh);
+  text-shadow: 0 0.08em 0 var(--ink);
+}
+
+.note:empty {
+  display: none;
+}
+
+#bBack {
+  position: fixed;
+  left: 8px;
+  top: 8px;
+  z-index: 5;
+  font-size: 20px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--ink);
+}
