@@ -180,6 +180,8 @@ const endPaint = (e) => {
 };
 cv.addEventListener('pointerup', endPaint);
 cv.addEventListener('pointercancel', endPaint);
+// 指でなぞったときに ブラウザがスクロールなどとして横取りし、pointercancel で止まってしまわないように
+cv.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
 
 // ---------- ボタン ----------
 $('bPlay').onclick = () => {
