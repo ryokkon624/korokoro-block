@@ -4,6 +4,7 @@
 import { tileTex, itemSprites, houseSprites, ITEM_NAMES, FONT, hash, drawBall } from './art.js';
 import { collideCircle } from './physics.js';
 import { sfx } from './sound.js';
+import { FRIENDS, Pet, drawHeart } from './friends.js';
 
 export const COLS = 20;
 export const ROWS = 9;
@@ -98,7 +99,8 @@ export class House {
   }
 
   // rows: セーブした家（なければ空き地）、items: 素材の数（そのまま増やしたり減らしたりする）
-  setup(rows, items) {
+  // friends: ともだちに なった どうぶつ（おうちを 歩きまわる）
+  setup(rows, items, friends = []) {
     const ok = Array.isArray(rows) && rows.length === ROWS && rows.every((r) => r.length === COLS);
     this.grid = (ok ? rows : blankRows()).map((r) => r.split(''));
     this.items = items;
@@ -107,6 +109,15 @@ export class House {
     let x = 0;
     while (x < COLS - 1 && this.isSolid(x, ROWS - 1)) x++;
     this.ball = { x: x + 0.5, y: ROWS - BALL_R, vx: 0, vy: 0, blink: 0 };
+    this.fx = [];
+    // ともだちは 横に ならべて、それぞれ いちばん下の あいているところに
+    const ids = friends.filter((id) => FRIENDS[id]);
+    this.pets = ids.map((id, i) => {
+      const col = Math.floor(((i + 1) * COLS) / (ids.length + 1));
+      let y = ROWS - 1;
+      while (y > 0 && this.isSolid(col, y)) y--;
+      return new Pet(id, col + 0.5, y + 1);
+    });
   }
 
   rows() {
@@ -155,6 +166,26 @@ export class House {
       b.y += (b.vy * dt) / n;
       collideCircle(b, BALL_R, (x, y) => this.isSolid(x, y), BOUNCE);
     }
+
+    const solid = (x, y) => this.isSolid(x, y);
+    for (const p of this.pets) {
+      p.update(dt, solid);
+      // ころんが ころがって ぶつかったら よろこぶ
+      if (p.cool <= 0 && Math.abs(b.vx) > 1 && Math.hypot(b.x - p.x, b.y - p.cy) < BALL_R + 0.4) this.cheer(p);
+    }
+    for (const e of this.fx) {
+      e.y -= 0.8 * dt;
+      e.life -= dt;
+    }
+    this.fx = this.fx.filter((e) => e.life > 0);
+  }
+
+  // ぴょんと はねて、なき声と ハート
+  cheer(p) {
+    p.hop();
+    sfx.voice(p.id);
+    this.fx.push({ heart: true, x: p.x - 0.25, y: p.y - 0.9, life: 1 });
+    this.fx.push({ text: FRIENDS[p.id].voice, x: p.x + 0.3, y: p.y - 1, life: 1 });
   }
 
   // ---------- さわる ----------
@@ -167,6 +198,14 @@ export class House {
 
   // さいしょにさわったマスが あいていれば「おく」、ブロックがあれば「けす」で なぞっていく
   pointerDown(px, py) {
+    // ともだちを タップしたときは、ブロックは おかない
+    const tx = (px - this.ox) / this.tile;
+    const ty = (py - this.oy) / this.tile;
+    const pet = this.pets.find((p) => p.hits(tx, ty));
+    if (pet) {
+      this.cheer(pet);
+      return;
+    }
     const c = this.cellAt(px, py);
     if (!c) return;
     this.stroke = { mode: this.grid[c.y][c.x] === '.' ? 'place' : 'erase', last: null, warned: false };
@@ -281,8 +320,30 @@ export class House {
       }
     }
 
+    for (const p of this.pets) p.draw(ctx, ox, oy, t);
+
     const b = this.ball;
     drawBall(ctx, ox + b.x * t, oy + b.y * t, BALL_R * t, b, this.time);
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    ctx.font = `800 ${Math.round(t * 0.4)}px ${FONT}`;
+    for (const e of this.fx) {
+      ctx.globalAlpha = Math.min(1, e.life * 3);
+      const x = ox + e.x * t;
+      const y = oy + e.y * t;
+      if (e.heart) {
+        drawHeart(ctx, x, y, t * 0.07);
+        continue;
+      }
+      ctx.lineWidth = t * 0.1;
+      ctx.strokeStyle = '#fff';
+      ctx.strokeText(e.text, x, y);
+      ctx.fillStyle = '#3b2a17';
+      ctx.fillText(e.text, x, y);
+    }
+    ctx.globalAlpha = 1;
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';

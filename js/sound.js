@@ -55,6 +55,24 @@ export const sfx = {
   lack() {
     tone(220, 0, 0.15, 0.15, 'square');
   },
+  // ともだちの なき声
+  voice(id, at = 0) {
+    if (id === 'dog') {
+      tone(330, at, 0.05, 0.18, 'square', 520);
+      tone(520, at + 0.04, 0.13, 0.16, 'square', 280);
+    } else if (id === 'cat') {
+      tone(720, at, 0.12, 0.16, 'sine', 980);
+      tone(980, at + 0.1, 0.32, 0.16, 'sine', 560);
+    } else if (id === 'squirrel') {
+      tone(1700, at, 0.05, 0.14, 'sine', 2400);
+      tone(1900, at + 0.09, 0.05, 0.14, 'sine', 2600);
+    }
+  },
+  // ともだちに なったとき
+  friend(id) {
+    this.voice(id);
+    [784, 988, 1175, 1568].forEach((f, i) => tone(f, 0.35 + i * 0.08, 0.2, 0.18));
+  },
   goal() {
     [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.1, 0.3, 0.22));
     tone(1047, 0.45, 0.6, 0.22);

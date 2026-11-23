@@ -4,6 +4,7 @@
 import { STAGES } from './stages.js';
 import { tileTex, itemSprites, ITEM_NAMES, ITEM_COLORS, ITEM_AMOUNT, FONT, hash, drawBall } from './art.js';
 import { collideCircle } from './physics.js';
+import { FRIENDS, POSE, drawFriend, drawFriendHead, drawBush, drawHeart } from './friends.js';
 import { sfx, buzz } from './sound.js';
 
 const BALL_R = 0.36;
@@ -12,6 +13,7 @@ const KEEP = { grass: 0.5, ice: 0.85 }; // 1秒あたりに残る速さ（こお
 const MAX_SPEED = 14;
 const BOUNCE = 0.4;
 const HUD = 0.9; // 上の表示のたかさ（マス）
+const FOLLOW_GAP = 0.85; // ともだちが ころんの どれだけ後ろを ついてくるか（マス）
 
 const WALLS = { '#': 'stone', '=': 'plank', T: 'leaves' };
 const FLOORS = { '.': 'grass', '~': 'ice' };
@@ -24,11 +26,13 @@ export class Game {
     this.dpr = 1;
     this.time = 0;
     this.onClear = null;
+    this.onFriend = null; // ともだちを見つけたときに呼ぶ（すぐセーブするため）
     this.load(0);
   }
 
   // ---------- ステージ ----------
-  load(index) {
+  // found: もう ともだちに なっている どうぶつ（その子は もう かくれていない）
+  load(index, found = []) {
     const stage = STAGES[index];
     this.index = index;
     this.name = stage.name;
@@ -36,6 +40,7 @@ export class Game {
     this.cols = stage.map[0].length;
     this.cells = [];
     this.items = [];
+    this.bush = null;
     for (let y = 0; y < this.rows; y++) {
       const row = [];
       for (let x = 0; x < this.cols; x++) {
@@ -44,6 +49,7 @@ export class Game {
         if (ITEMS[ch]) this.items.push({ type: ITEMS[ch], x: x + 0.5, y: y + 0.5, taken: false });
         if (ch === 'S') this.start = { x: x + 0.5, y: y + 0.5 };
         if (ch === 'G') this.goal = { x: x + 0.5, y: y + 0.5 };
+        if (ch === 'a') this.bush = { x: x + 0.5, y: y + 0.5 };
       }
       this.cells.push(row);
     }
@@ -63,6 +69,14 @@ export class Game {
       }
     }
     this.ball = { x: this.start.x, y: this.start.y, vx: 0, vy: 0, scale: 1, blink: 0 };
+    this.friendId = stage.friend || null;
+    this.friendKnown = !!this.friendId && found.includes(this.friendId);
+    this.friend =
+      this.bush && this.friendId && !this.friendKnown
+        ? { id: this.friendId, x: this.bush.x, y: this.bush.y, z: 0, state: 'hide', t: 0, dir: 1, peek: 0, walking: false }
+        : null;
+    this.trail = [];
+    this.banner = null;
     this.phase = 'play';
     this.timer = 0;
     this.reported = false;
@@ -100,6 +114,7 @@ export class Game {
   update(dt, tilt) {
     this.time += dt;
     this.updateEffects(dt);
+    this.updateFriend(dt);
     const b = this.ball;
     if (b.blink > 0) b.blink -= dt;
 
@@ -175,6 +190,9 @@ export class Game {
       this.texts.push({ text: `${ITEM_NAMES[it.type]} ×${ITEM_AMOUNT[it.type]} ゲット！`, x: it.x, y: it.y - 0.4, life: 1.2 });
     }
 
+    const f = this.friend;
+    if (f && f.state === 'hide' && Math.hypot(f.x - b.x, f.y - b.y) < BALL_R + 0.45) this.meetFriend();
+
     const cell = this.cellAt(b.x, b.y);
     const cx = Math.floor(b.x) + 0.5;
     const cy = Math.floor(b.y) + 0.5;
@@ -206,6 +224,94 @@ export class Game {
     b.blink = 0.8;
     this.phase = 'play';
     sfx.respawn();
+    // ともだちも いっしょに スタートへ
+    const f = this.friend;
+    if (f && f.state !== 'hide') {
+      Object.assign(f, { x: b.x, y: b.y, z: 0, state: 'follow' });
+      this.trail = [{ x: b.x, y: b.y }];
+    }
+  }
+
+  // ---------- ともだち ----------
+  meetFriend() {
+    const f = this.friend;
+    f.state = 'jump';
+    f.t = 0;
+    sfx.friend(f.id);
+    buzz(80);
+    for (let i = 0; i < 6; i++) {
+      this.particles.push({
+        heart: true,
+        x: f.x + (Math.random() - 0.5) * 0.6,
+        y: f.y - 0.2,
+        vx: (Math.random() - 0.5) * 1.2,
+        vy: -1.2 - Math.random() * 1.2,
+        g: 0,
+        life: 1.2,
+        max: 1.2,
+        size: 0.05,
+      });
+    }
+    this.banner = { id: f.id, text: `${FRIENDS[f.id].name}が ともだちに なった！`, life: 3 };
+    this.trail = [{ x: f.x, y: f.y }];
+    if (this.onFriend) this.onFriend(f.id);
+  }
+
+  updateFriend(dt) {
+    if (this.banner && (this.banner.life -= dt) <= 0) this.banner = null;
+    const f = this.friend;
+    if (!f) return;
+    const b = this.ball;
+    f.t += dt;
+
+    if (f.state === 'hide') {
+      // ときどき しげみから 顔を出す。ころんが近くに来たら ずっと見ている
+      f.dir = b.x < f.x ? -1 : 1;
+      const near = Math.hypot(b.x - f.x, b.y - f.y) < 3;
+      const want = near || (this.time + 0.7) % 3.4 < 2 ? 1 : 0;
+      f.peek += (want - f.peek) * Math.min(1, dt * 8);
+      return;
+    }
+
+    // ころんの 通ったあとを おぼえて、そのあとを ついていく
+    const last = this.trail[this.trail.length - 1];
+    if (!last || Math.hypot(b.x - last.x, b.y - last.y) > 0.08) {
+      this.trail.push({ x: b.x, y: b.y });
+      if (this.trail.length > 80) this.trail.shift();
+    }
+
+    if (f.state === 'jump') {
+      const k = Math.min(1, f.t / 0.55);
+      f.z = Math.sin(Math.PI * k) * 0.9;
+      if (k >= 1) f.state = 'follow';
+      return;
+    }
+
+    const to = this.followPoint();
+    const dx = to.x - f.x;
+    const dy = to.y - f.y;
+    const k = Math.min(1, dt * 8);
+    f.x += dx * k;
+    f.y += dy * k;
+    f.walking = (Math.hypot(dx, dy) * k) / dt > 0.6;
+    if (Math.abs(dx) > 0.02) f.dir = Math.sign(dx);
+    f.z = this.phase === 'cleared' ? Math.abs(Math.sin(this.time * 7)) * 0.3 : 0;
+  }
+
+  // ころんから 通ったあとを FOLLOW_GAP だけ さかのぼった点
+  followPoint() {
+    let need = FOLLOW_GAP;
+    let px = this.ball.x;
+    let py = this.ball.y;
+    for (let i = this.trail.length - 1; i >= 0; i--) {
+      const p = this.trail[i];
+      const d = Math.hypot(px - p.x, py - p.y);
+      if (d >= need) return { x: px + ((p.x - px) * need) / d, y: py + ((p.y - py) * need) / d };
+      need -= d;
+      px = p.x;
+      py = p.y;
+    }
+    return { x: px, y: py };
   }
 
   result() {
@@ -215,7 +321,8 @@ export class Game {
       total[it.type] = (total[it.type] || 0) + ITEM_AMOUNT[it.type];
       if (it.taken) got[it.type] = (got[it.type] || 0) + ITEM_AMOUNT[it.type];
     }
-    return { index: this.index, got, total, all: this.items.every((it) => it.taken) };
+    const friend = this.friend && this.friend.state !== 'hide' ? this.friend.id : null;
+    return { index: this.index, got, total, all: this.items.every((it) => it.taken), friend };
   }
 
   // ---------- こうか ----------
@@ -334,12 +441,17 @@ export class Game {
       ctx.drawImage(itemSprites[it.type], X(it.x) - s / 2, Y(it.y + bob - 0.06) - s / 2, s, s);
     }
 
+    this.drawFriendArea(ctx, X, Y, t);
     drawBall(ctx, X(this.ball.x), Y(this.ball.y), BALL_R * t * this.ball.scale, this.ball, this.time);
 
     for (const p of this.particles) {
       ctx.globalAlpha = Math.min(1, (p.life / p.max) * 2);
-      ctx.fillStyle = p.color;
       const s = p.size * t;
+      if (p.heart) {
+        drawHeart(ctx, X(p.x), Y(p.y), s);
+        continue;
+      }
+      ctx.fillStyle = p.color;
       ctx.fillRect(X(p.x) - s / 2, Y(p.y) - s / 2, s, s);
     }
     ctx.globalAlpha = 1;
@@ -359,6 +471,57 @@ export class Game {
     ctx.globalAlpha = 1;
 
     this.drawHud(ctx);
+    if (this.banner) this.drawBanner(ctx);
+  }
+
+  drawFriendArea(ctx, X, Y, t) {
+    const f = this.friend;
+    const blink = this.time % 3.1 < 0.12;
+    if (this.bush) {
+      const bx = X(this.bush.x);
+      const bottom = Y(this.bush.y) + t * 0.42;
+      const size = t * 0.92;
+      let tilt = 0;
+      if (f && f.state === 'hide') {
+        // 顔は しげみの うしろから 出たり入ったりする（大きさは 歩いているときと同じ）
+        const px = (t * 0.85 * FRIENDS[f.id].size) / 16;
+        drawFriendHead(ctx, f.id, bx, bottom - size + t * (0.34 - 0.32 * f.peek), px, f.dir < 0, blink);
+        tilt = f.peek > 0.05 && f.peek < 0.95 ? Math.sin(this.time * 40) * 0.06 : 0;
+      }
+      drawBush(ctx, bx, bottom, size, tilt);
+    }
+    if (!f || f.state === 'hide') return;
+    const x = X(f.x);
+    const y = Y(f.y) + t * 0.3;
+    ctx.fillStyle = 'rgba(0,0,0,.2)';
+    ctx.beginPath();
+    ctx.ellipse(x, y, t * 0.3, t * 0.08, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const hopping = f.state === 'jump' || f.z > 0.05;
+    const pose = hopping || (f.walking && Math.floor(this.time / 0.14) % 2) ? POSE.walk : POSE.stand;
+    drawFriend(ctx, f.id, x, y - f.z * t, t * 0.85 * FRIENDS[f.id].size, { flip: f.dir < 0, pose, blink });
+  }
+
+  drawBanner(ctx) {
+    const t = this.tile;
+    const { text, id, life } = this.banner;
+    ctx.globalAlpha = Math.min(1, life * 3);
+    ctx.font = `800 ${Math.round(t * 0.5)}px ${FONT}`;
+    const icon = t * 0.9;
+    const w = ctx.measureText(text).width + icon + t * 0.9;
+    const h = t * 1.05;
+    const x = this.W / 2 - w / 2;
+    const y = this.oy + t * 0.3;
+    ctx.fillStyle = 'rgba(255,255,255,.93)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, h / 2);
+    ctx.fill();
+    drawFriend(ctx, id, x + t * 0.35 + icon / 2, y + h / 2 + icon * 0.36, icon);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#e0457b';
+    ctx.fillText(text, x + t * 0.5 + icon, y + h / 2);
+    ctx.globalAlpha = 1;
   }
 
   drawFlag(ctx, x, y, t) {
@@ -416,5 +579,12 @@ export class Game {
       x -= s * 1.15;
     }
     ctx.globalAlpha = 1;
+
+    // ともだちが かくれているステージは、見つけるまで かげだけ
+    if (this.friendId) {
+      const met = this.friendKnown || (this.friend && this.friend.state !== 'hide');
+      const w = s * 1.3;
+      drawFriend(ctx, this.friendId, x + s * 0.35, cy + w * 0.36, w, { shadow: !met });
+    }
   }
 }
