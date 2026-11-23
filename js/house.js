@@ -5,6 +5,7 @@ import { tileTex, itemSprites, houseSprites, ITEM_NAMES, FONT, hash, drawBall } 
 import { collideCircle } from './physics.js';
 import { sfx } from './sound.js';
 import { FRIENDS, Pet, drawHeart } from './friends.js';
+import { VISITORS, Visitors, drawVisitor } from './visitors.js';
 
 export const COLS = 20;
 export const ROWS = 9;
@@ -54,8 +55,8 @@ function roofPath(g, x, y, t, left, right) {
   g.closePath();
 }
 
-// ブロックを1つえがく（left/right は やねの形のため）
-function drawBlock(g, code, x, y, t, variant, left = false, right = false) {
+// ブロックを1つえがく（left/right は やねの形のため）。ずかんでも つかう
+export function drawBlock(g, code, x, y, t, variant, left = false, right = false) {
   g.imageSmoothingEnabled = false;
   if (code === 'w') g.drawImage(tileTex.plank[variant], x, y, t, t);
   else if (code === 's') g.drawImage(tileTex.bricks[variant], x, y, t, t);
@@ -95,16 +96,37 @@ export class House {
     this.onChange = null; // ブロックをおいた・けしたときに呼ぶ（セーブ用）
     this.stroke = null;
     this.toast = null;
+    this.banners = []; // 「あそびに きた！」は いちどに きても 1つずつ じゅんばんに 出す
+    this.onVisitor = null; // おきゃくさんが はじめて きたときに呼ぶ（すぐセーブするため）
+    this.visitors = new Visitors();
+    this.visitors.onArrive = (id) => this.arrive(id);
+    // おきゃくさんから 見た おうち
+    const house = this;
+    this.world = {
+      cols: COLS,
+      rows: ROWS,
+      minY: 0.4,
+      code: (x, y) => (this.grid[y] && this.grid[y][x]) || '.',
+      isSolid: (x, y) => this.isSolid(x, y),
+      get ball() {
+        return house.ball;
+      },
+      say: (text, x, y) => this.fx.push({ text, x, y, life: 1 }),
+    };
     this.setup(null, this.items);
   }
 
   // rows: セーブした家（なければ空き地）、items: 素材の数（そのまま増やしたり減らしたりする）
   // friends: ともだちに なった どうぶつ（おうちを 歩きまわる）
-  setup(rows, items, friends = []) {
+  // seen: きたことが ある おきゃくさん（はじめての子だけ「あそびに きた！」を出す）
+  setup(rows, items, friends = [], seen = []) {
     const ok = Array.isArray(rows) && rows.length === ROWS && rows.every((r) => r.length === COLS);
     this.grid = (ok ? rows : blankRows()).map((r) => r.split(''));
     this.items = items;
     this.toast = null;
+    this.banners = [];
+    this.seen = [...seen];
+    this.visitors.reset();
     // ころんは 地面の 左のほうの あいているところに
     let x = 0;
     while (x < COLS - 1 && this.isSolid(x, ROWS - 1)) x++;
@@ -178,6 +200,24 @@ export class House {
       e.life -= dt;
     }
     this.fx = this.fx.filter((e) => e.life > 0);
+
+    this.visitors.update(dt, this.world);
+    const top = this.banners[0];
+    if (top) {
+      if (!top.shown) {
+        top.shown = true;
+        sfx.visit();
+        this.toast = null;
+      }
+      if ((top.life -= dt) <= 0) this.banners.shift();
+    }
+  }
+
+  arrive(id) {
+    if (this.seen.includes(id)) return;
+    this.seen.push(id);
+    this.banners.push({ id, text: `${VISITORS[id].name}が あそびに きた！`, life: 3 });
+    if (this.onVisitor) this.onVisitor(id);
   }
 
   // ぴょんと はねて、なき声と ハート
@@ -204,6 +244,12 @@ export class House {
     const pet = this.pets.find((p) => p.hits(tx, ty));
     if (pet) {
       this.cheer(pet);
+      return;
+    }
+    const v = this.visitors.hit(tx, ty);
+    if (v) {
+      v.tap(this.world);
+      if (v.id !== 'bird') sfx.twinkle();
       return;
     }
     const c = this.cellAt(px, py);
@@ -324,6 +370,7 @@ export class House {
 
     const b = this.ball;
     drawBall(ctx, ox + b.x * t, oy + b.y * t, BALL_R * t, b, this.time);
+    this.visitors.draw(ctx, ox, oy, t);
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -356,6 +403,29 @@ export class House {
     ctx.fillText('おうちづくり', W / 2, oy - (TOP * t) / 2);
 
     if (this.toast) this.drawToast(ctx);
+    if (this.banners.length) this.drawBanner(ctx, this.banners[0]);
+  }
+
+  // 「〇〇が あそびに きた！」
+  drawBanner(ctx, { text, id, life }) {
+    const t = this.tile;
+    ctx.globalAlpha = Math.min(1, life * 3);
+    ctx.font = `800 ${Math.round(t * 0.5)}px ${FONT}`;
+    const icon = t * 0.9;
+    const w = ctx.measureText(text).width + icon + t * 0.9;
+    const h = t * 1.05;
+    const x = this.W / 2 - w / 2;
+    const y = this.oy + t * 0.3;
+    ctx.fillStyle = 'rgba(255,255,255,.93)';
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, h / 2);
+    ctx.fill();
+    drawVisitor(ctx, id, x + t * 0.35 + icon / 2, y + h / 2, icon * 1.1);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#e0457b';
+    ctx.fillText(text, x + t * 0.5 + icon, y + h / 2);
+    ctx.globalAlpha = 1;
   }
 
   drawClouds(ctx) {

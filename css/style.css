@@ -284,10 +284,39 @@ button {
   gap: 3vh;
 }
 
-#zukanCount {
-  margin-left: 0.4em;
-  font-size: 0.6em;
-  color: #ffe14a;
+#zukanHead {
+  display: flex;
+  align-items: center;
+  gap: 3vw;
+}
+
+#zukanTabs {
+  display: flex;
+  gap: 1.5vw;
+}
+
+.tab {
+  font-size: min(2.8vw, 4.6vh);
+  padding: 0.3em 0.9em;
+  border-radius: 0.5em;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--ink);
+  box-shadow: 0 0.14em 0 #b9a88f;
+}
+
+.tab b {
+  margin-left: 0.2em;
+  font-size: 0.85em;
+  color: #8a6d45;
+}
+
+.tab.done b {
+  color: #e0457b;
+}
+
+.tab.on {
+  background: #ffd23f;
+  box-shadow: 0 0 0 0.12em #fff, 0 0.14em 0 #c99a00;
 }
 
 #zukanBody {

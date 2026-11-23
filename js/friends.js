@@ -176,7 +176,7 @@ const ART = {
 };
 
 // edge: [もとの色, ふちの色]。すきま（.）に となりあう ドットを ふちの色にする
-function outline(rows, [from, to]) {
+export function outline(rows, [from, to]) {
   const at = (x, y) => (rows[y] && rows[y][x]) || '.';
   return rows.map((row, y) =>
     [...row]
@@ -185,10 +185,11 @@ function outline(rows, [from, to]) {
   );
 }
 
-function paint(rows, palette) {
+// 文字の ならびから ドット絵を つくる（おきゃくさんでも つかう）
+export function paint(rows, palette) {
   const c = document.createElement('canvas');
-  c.width = SW;
-  c.height = SH;
+  c.width = rows[0].length;
+  c.height = rows.length;
   const g = c.getContext('2d');
   rows.forEach((row, y) => {
     [...row].forEach((ch, x) => {
@@ -201,15 +202,15 @@ function paint(rows, palette) {
 }
 
 // まだ見つけていない子は かげだけ見せる
-function silhouette(src) {
+export function silhouette(src) {
   const c = document.createElement('canvas');
-  c.width = SW;
-  c.height = SH;
+  c.width = src.width;
+  c.height = src.height;
   const g = c.getContext('2d');
   g.drawImage(src, 0, 0);
   g.globalCompositeOperation = 'source-in';
   g.fillStyle = '#2b2b2b';
-  g.fillRect(0, 0, SW, SH);
+  g.fillRect(0, 0, c.width, c.height);
   return c;
 }
 
