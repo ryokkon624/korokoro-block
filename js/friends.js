@@ -4,12 +4,55 @@
 const SW = 16;
 const SH = 12;
 
+// climb: のぼれる かべの高さ（マス）、hop: あるきながら はねる強さ、pounce: ときどき 大ジャンプ
+// note: ずかんの せつめい（小1の漢字だけ）
 export const FRIENDS = {
-  dog: { name: '犬', voice: 'わん！', speed: 1.8, climb: 1, size: 1.05 },
-  cat: { name: 'ねこ', voice: 'にゃー', speed: 1.3, climb: 2, size: 1 },
-  squirrel: { name: 'りす', voice: 'きゅっ', speed: 2, climb: 2, size: 0.9, hop: true },
+  dog: {
+    name: '犬',
+    voice: 'わん！',
+    speed: 1.8,
+    climb: 1,
+    size: 1.05,
+    note: 'はしるのが 大すき。1マスの かべなら ジャンプで のぼれるよ。',
+  },
+  cat: {
+    name: 'ねこ',
+    voice: 'にゃー',
+    speed: 1.3,
+    climb: 2,
+    size: 1,
+    note: '2マスの かべも ひょいっと のぼるよ。つかれたら すわって ひと休み。',
+  },
+  rabbit: {
+    name: 'うさぎ',
+    voice: 'ぷう',
+    speed: 1.5,
+    climb: 3,
+    size: 1,
+    hop: 6,
+    note: 'ながい 耳が じまん。3マスの かべも ぴょんと のぼれるよ。',
+  },
+  fox: {
+    name: 'きつね',
+    voice: 'こんこん',
+    speed: 2,
+    climb: 2,
+    size: 1.05,
+    pounce: true,
+    note: 'ふさふさの しっぽ。ときどき 上に 大ジャンプ！',
+  },
+  squirrel: {
+    name: 'りす',
+    voice: 'きゅっ',
+    speed: 2,
+    climb: 2,
+    size: 0.9,
+    hop: 4.5,
+    note: '大きな しっぽで いつも ぴょこぴょこ はねているよ。',
+  },
 };
-export const FRIEND_ORDER = ['dog', 'cat', 'squirrel'];
+// ずかんの じゅん（ステージの じゅん）
+export const FRIEND_ORDER = ['dog', 'cat', 'rabbit', 'fox', 'squirrel'];
 
 // rows: 頭とからだ（10行）、legs: 足（2行）の たち・あるき、sit: すわったときの足（1行）
 // fur: まばたきで目をうめる色、eyes: 目の場所、head: しげみから のぞくときに見せる はんい [x, y, w, h]
@@ -83,7 +126,64 @@ const ART = {
     eyes: [[10, 3], [14, 3]],
     head: [9, 1, 7, 5],
   },
+  rabbit: {
+    rows: [
+      '.........uu.uu..',
+      '.........up.pu..',
+      '.........up.pu..',
+      '.........up.pu..',
+      '........uuuuuuu.',
+      '........ukuuuku.',
+      '...uuuu.uuupuuu.',
+      '.uuuuuuuuuuuuu..',
+      'wwuuuuuuuuuuu...',
+      'ww.uuuuuuuuuu...',
+    ],
+    legs: [
+      ['...uuu....uu....', '..uuuu....uu....'],
+      ['.uuu.......uu...', 'uuu.........uu..'],
+    ],
+    sit: '..uuuuu..uuu....',
+    palette: { u: '#f6f3ee', U: '#b8afa6', w: '#ffffff', p: '#ff9fb2', k: '#3b2a17' },
+    edge: ['u', 'U'], // 白いので、ふちを はい色にして 空でも見えるようにする
+    fur: 'u',
+    eyes: [[9, 5], [13, 5]],
+    head: [8, 0, 7, 7],
+  },
+  fox: {
+    rows: [
+      '........k.....k.',
+      '........fk...kf.',
+      '........fffffff.',
+      '........fkfffkf.',
+      '........wwfffww.',
+      '.ff......wwkww..',
+      'ffff.fffffwww...',
+      'wffffffffffww...',
+      'wwfffffffffff...',
+      '.ww.ffffffffff..',
+    ],
+    legs: [
+      ['....ff.....ff...', '....kk.....kk...'],
+      ['...ff.ff..ff.ff.', '...kk.kk..kk.kk.'],
+    ],
+    sit: '....kkkk..kkkk..',
+    palette: { f: '#ec7330', w: '#fff6ea', k: '#3b2a17' },
+    fur: 'f',
+    eyes: [[9, 3], [13, 3]],
+    head: [8, 0, 7, 6],
+  },
 };
+
+// edge: [もとの色, ふちの色]。すきま（.）に となりあう ドットを ふちの色にする
+function outline(rows, [from, to]) {
+  const at = (x, y) => (rows[y] && rows[y][x]) || '.';
+  return rows.map((row, y) =>
+    [...row]
+      .map((ch, x) => (ch === from && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => at(x + dx, y + dy) === '.') ? to : ch))
+      .join(''),
+  );
+}
 
 function paint(rows, palette) {
   const c = document.createElement('canvas');
@@ -120,7 +220,7 @@ for (const [id, a] of Object.entries(ART)) {
     [...a.rows, ...a.legs[0]],
     [...a.rows, ...a.legs[1]],
     ['.'.repeat(SW), ...a.rows, a.sit],
-  ];
+  ].map((rows) => (a.edge ? outline(rows, a.edge) : rows));
   const frame = (rows, blink, dy) =>
     paint(
       rows.map((row, y) =>
@@ -267,7 +367,10 @@ export class Pet {
           this.vx = 0;
         }
       } else if (f.hop) {
-        this.vy = -4.5;
+        this.vy = -f.hop;
+        this.ground = false;
+      } else if (f.pounce && Math.random() < dt * 0.35) {
+        this.vy = -9;
         this.ground = false;
       }
     }

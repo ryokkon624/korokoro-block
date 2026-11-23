@@ -14,7 +14,8 @@ import {
 import { initAudio, sfx } from './sound.js';
 import { loadSave, writeSave } from './save.js';
 import { ITEM_ORDER, itemIconURL } from './art.js';
-import { FRIENDS, friendIconURL } from './friends.js';
+import { FRIENDS, FRIEND_ORDER, friendIconURL } from './friends.js';
+import { Zukan } from './zukan.js';
 
 // はじめて おうちづくりを開いたときの プレゼント
 const GIFT = { wood: 20, stone: 20, flower: 5, gem: 3 };
@@ -24,6 +25,7 @@ const cv = $('cv');
 const ctx = cv.getContext('2d');
 const game = new Game();
 const house = new House();
+const zukan = new Zukan();
 const icons = Object.fromEntries(ITEM_ORDER.map((type) => [type, itemIconURL(type)]));
 // ともだちの絵（見つけた子は色つき、まだの子は かげ）
 const friendIcons = Object.fromEntries(
@@ -48,8 +50,8 @@ function resize() {
 
 function show(name) {
   current = name;
-  for (const id of ['title', 'select', 'clear']) $(id).classList.toggle('hidden', id !== name);
-  $('bBack').classList.toggle('hidden', name !== 'play' && name !== 'house');
+  for (const id of ['title', 'select', 'clear', 'zukan']) $(id).classList.toggle('hidden', id !== name);
+  $('bBack').classList.toggle('hidden', !['play', 'house', 'zukan'].includes(name));
   $('palette').classList.toggle('hidden', name !== 'house');
   setMouseTilt(name !== 'house');
 }
@@ -71,6 +73,7 @@ const invHTML = (counts) =>
     .join('');
 
 function showSelect() {
+  game.banner = null; // うしろに うつる ステージに「ともだちに なった！」が のこらないように
   const list = $('stageList');
   list.innerHTML = '';
   STAGES.forEach((stage, i) => {
@@ -92,7 +95,15 @@ function showSelect() {
   });
   const inv = invHTML(save.items);
   $('inventory').innerHTML = inv ? `<span>もってる もの</span>${inv}` : '';
+  const n = FRIEND_ORDER.filter((id) => save.friends.includes(id)).length;
+  $('zukanBadge').textContent = `${n}/${FRIEND_ORDER.length}`;
   show('select');
+}
+
+function showZukan() {
+  tapped();
+  zukan.open(save.friends);
+  show('zukan');
 }
 
 function startStage(i) {
@@ -218,6 +229,7 @@ $('bToSelect').onclick = () => {
   showSelect();
 };
 $('bHouse').onclick = showHouse;
+$('bZukan').onclick = showZukan;
 $('bGiftOk').onclick = () => {
   sfx.tap();
   $('gift').classList.add('hidden');
@@ -241,10 +253,14 @@ function loop(now) {
     if (current === 'play') game.update(dt, readTilt());
     else if (current === 'clear') game.update(dt, { x: 0, y: 0 });
     game.render(ctx);
+    if (current === 'zukan') {
+      zukan.update(dt);
+      zukan.render();
+    }
   }
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 
 // デバッグ用（PC で動作確認するときに使う）
-window.korokoro = { game, house, get save() { return save; }, resetSave() { save = loadSave(); } };
+window.korokoro = { game, house, zukan, get save() { return save; }, resetSave() { save = loadSave(); } };
