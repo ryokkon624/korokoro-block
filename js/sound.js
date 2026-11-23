@@ -63,6 +63,12 @@ export const sfx = {
     } else if (id === 'cat') {
       tone(720, at, 0.12, 0.16, 'sine', 980);
       tone(980, at + 0.1, 0.32, 0.16, 'sine', 560);
+    } else if (id === 'rabbit') {
+      tone(560, at, 0.1, 0.16, 'sine', 400);
+      tone(520, at + 0.14, 0.14, 0.16, 'sine', 360);
+    } else if (id === 'fox') {
+      tone(1050, at, 0.07, 0.14, 'triangle', 760);
+      tone(1050, at + 0.15, 0.07, 0.14, 'triangle', 760);
     } else if (id === 'squirrel') {
       tone(1700, at, 0.05, 0.14, 'sine', 2400);
       tone(1900, at + 0.09, 0.05, 0.14, 'sine', 2600);

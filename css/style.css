@@ -17,7 +17,7 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-canvas {
+#cv {
   display: block;
   position: fixed;
   inset: 0;
@@ -267,4 +267,125 @@ button {
 
 #gift {
   z-index: 10;
+}
+
+/* ---------- ずかん ---------- */
+.btn.book {
+  background: #8fd3ff;
+  color: #10405f;
+  box-shadow: 0 0.16em 0 #4f97c4;
+}
+
+#zukanBadge {
+  font-size: 0.75em;
+}
+
+#zukan {
+  gap: 3vh;
+}
+
+#zukanCount {
+  margin-left: 0.4em;
+  font-size: 0.6em;
+  color: #ffe14a;
+}
+
+#zukanBody {
+  display: flex;
+  align-items: center;
+  gap: 3vw;
+}
+
+#zukanList {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  gap: min(1.5vw, 2.4vh);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1em;
+  width: min(13vw, 22vh);
+  aspect-ratio: 1;
+  padding: 0.2em;
+  border-radius: 0.35em;
+  background: #fff8e7;
+  color: var(--ink);
+  font-size: min(2.3vw, 3.8vh);
+  line-height: 1.15;
+  box-shadow: 0 0.2em 0 #b9a88f;
+}
+
+.card .no {
+  font-size: 0.7em;
+  color: #a08a6a;
+}
+
+.card img {
+  width: 66%;
+  image-rendering: pixelated;
+}
+
+.card.unknown {
+  background: #d8cdbb;
+}
+
+.card.on {
+  background: #ffd23f;
+  box-shadow: 0 0 0 0.18em #fff, 0 0.2em 0 #c99a00;
+}
+
+.card:active {
+  transform: translateY(0.1em);
+}
+
+#zukanPage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1vh;
+  width: min(36vw, 56vh);
+  padding: 2vh 2vh 2.5vh;
+  border-radius: 0.6em;
+  background: #fff8e7;
+  color: var(--ink);
+  box-shadow: 0 0.6vh 0 #b9a88f;
+}
+
+#zukanCv {
+  display: block;
+  width: 100%;
+  aspect-ratio: 10 / 7;
+  border-radius: 0.4em;
+  touch-action: none;
+}
+
+#zukanName {
+  font-size: min(3.6vw, 6vh);
+  line-height: 1.2;
+}
+
+#zukanNote,
+#zukanWhere {
+  margin: 0;
+  font-size: min(2.2vw, 3.5vh);
+  line-height: 1.45;
+  text-align: center;
+  word-break: keep-all; /* スペースの ところで 折り返す */
+}
+
+#zukanNote {
+  min-height: 2.9em; /* 1行でも 2行でも、ページの 大きさが かわらないように */
+}
+
+#zukanWhere {
+  color: #8a6d45;
+  font-size: min(2vw, 3.1vh);
+}
+
+#zukanWhere:empty {
+  display: none;
 }
