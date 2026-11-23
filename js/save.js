@@ -10,6 +10,7 @@ function blank() {
     items: { wood: 0, stone: 0, flower: 0, gem: 0 },
     house: null, // おうちづくりの ブロックのならび（たての行ごとの文字列）
     houseGift: false, // はじめての おうちづくりの プレゼントをもらったか
+    friends: [], // ともだちに なった どうぶつ（見つけた じゅん）
   };
 }
 

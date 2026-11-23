@@ -14,6 +14,7 @@ import {
 import { initAudio, sfx } from './sound.js';
 import { loadSave, writeSave } from './save.js';
 import { ITEM_ORDER, itemIconURL } from './art.js';
+import { FRIENDS, friendIconURL } from './friends.js';
 
 // はじめて おうちづくりを開いたときの プレゼント
 const GIFT = { wood: 20, stone: 20, flower: 5, gem: 3 };
@@ -24,6 +25,10 @@ const ctx = cv.getContext('2d');
 const game = new Game();
 const house = new House();
 const icons = Object.fromEntries(ITEM_ORDER.map((type) => [type, itemIconURL(type)]));
+// ともだちの絵（見つけた子は色つき、まだの子は かげ）
+const friendIcons = Object.fromEntries(
+  Object.keys(FRIENDS).map((id) => [id, { on: friendIconURL(id), off: friendIconURL(id, 48, true) }]),
+);
 let save = loadSave();
 let current = 'title';
 
@@ -74,10 +79,14 @@ function showSelect() {
     btn.className = open ? 'stage' : 'stage locked';
     btn.disabled = !open;
     const stars = (save.cleared.includes(i) ? '★' : '☆') + (save.perfect.includes(i) ? '★' : '☆');
+    const friend =
+      open && stage.friend
+        ? `<img src="${friendIcons[stage.friend][save.friends.includes(stage.friend) ? 'on' : 'off']}" alt="">`
+        : '';
     btn.innerHTML =
       `<span class="num">${open ? i + 1 : '🔒'}</span>` +
       `<span class="name">${stage.name}</span>` +
-      `<span class="stars">${stars}</span>`;
+      `<span class="stars">${stars}${friend}</span>`;
     btn.onclick = () => startStage(i);
     list.appendChild(btn);
   });
@@ -88,9 +97,16 @@ function showSelect() {
 
 function startStage(i) {
   tapped();
-  game.load(i);
+  game.load(i, save.friends);
   show('play');
 }
+
+// ともだちは クリアする前に もどっても いなくならないように、見つけたら すぐセーブする
+game.onFriend = (id) => {
+  if (save.friends.includes(id)) return;
+  save.friends.push(id);
+  writeSave(save);
+};
 
 game.onClear = (res) => {
   if (!save.cleared.includes(res.index)) save.cleared.push(res.index);
@@ -102,6 +118,9 @@ game.onClear = (res) => {
   $('clearTitle').textContent = last ? 'ぜんぶ クリア！ すごい！' : 'クリア！';
   const got = invHTML(res.got);
   $('clearItems').innerHTML = got ? `<span>もちかえった もの</span>${got}` : '';
+  $('clearFriend').innerHTML = res.friend
+    ? `<span class="inv"><img src="${friendIcons[res.friend].on}" alt="">${FRIENDS[res.friend].name}が おうちで まってるよ！</span>`
+    : '';
   $('clearNote').textContent = res.all ? 'ぜんぶ あつめた！ ★★' : got ? '' : 'こんどは アイテムも あつめてみよう！';
   $('bNext').classList.toggle('hidden', last);
   show('clear');
@@ -110,7 +129,7 @@ game.onClear = (res) => {
 // ---------- おうちづくり ----------
 function showHouse() {
   tapped();
-  house.setup(save.house, save.items);
+  house.setup(save.house, save.items, save.friends);
   show('house');
   if (!save.houseGift) {
     for (const [type, n] of Object.entries(GIFT)) save.items[type] += n;

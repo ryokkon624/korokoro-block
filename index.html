@@ -13,7 +13,7 @@
   // GitHub Pages は JS/CSS を10分キャッシュさせるので、更新直後に古いファイルが混ざらないよう毎回読みなおす。
   // js/ にファイルを増やしたら FILES にも足すこと
   (() => {
-    const FILES = ['main', 'game', 'house', 'physics', 'stages', 'art', 'sensor', 'sound', 'save'];
+    const FILES = ['main', 'game', 'house', 'friends', 'physics', 'stages', 'art', 'sensor', 'sound', 'save'];
     const v = Date.now();
     const imports = {};
     for (const f of FILES) imports[new URL(`js/${f}.js`, location.href).href] = `./js/${f}.js?v=${v}`;
@@ -40,6 +40,7 @@
 <div id="clear" class="screen hidden">
   <h2 id="clearTitle">クリア！</h2>
   <div id="clearItems"></div>
+  <div id="clearFriend"></div>
   <p id="clearNote" class="note"></p>
   <div class="row">
     <button id="bRetry" class="btn">もういちど</button>
