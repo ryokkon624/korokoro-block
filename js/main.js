@@ -16,6 +16,7 @@ import { loadSave, writeSave } from './save.js';
 import { ITEM_ORDER, itemIconURL } from './art.js';
 import { FRIENDS, FRIEND_ORDER, friendIconURL } from './friends.js';
 import { Zukan } from './zukan.js';
+import { VISITOR_ORDER } from './visitors.js';
 
 // はじめて おうちづくりを開いたときの プレゼント
 const GIFT = { wood: 20, stone: 20, flower: 5, gem: 3 };
@@ -95,14 +96,16 @@ function showSelect() {
   });
   const inv = invHTML(save.items);
   $('inventory').innerHTML = inv ? `<span>もってる もの</span>${inv}` : '';
-  const n = FRIEND_ORDER.filter((id) => save.friends.includes(id)).length;
-  $('zukanBadge').textContent = `${n}/${FRIEND_ORDER.length}`;
+  const n =
+    FRIEND_ORDER.filter((id) => save.friends.includes(id)).length +
+    VISITOR_ORDER.filter((id) => save.visitors.includes(id)).length;
+  $('zukanBadge').textContent = `${n}/${FRIEND_ORDER.length + VISITOR_ORDER.length}`;
   show('select');
 }
 
 function showZukan() {
   tapped();
-  zukan.open(save.friends);
+  zukan.open(save.friends, save.visitors);
   show('zukan');
 }
 
@@ -140,7 +143,7 @@ game.onClear = (res) => {
 // ---------- おうちづくり ----------
 function showHouse() {
   tapped();
-  house.setup(save.house, save.items, save.friends);
+  house.setup(save.house, save.items, save.friends, save.visitors);
   show('house');
   if (!save.houseGift) {
     for (const [type, n] of Object.entries(GIFT)) save.items[type] += n;
@@ -151,6 +154,12 @@ function showHouse() {
   }
   updatePalette();
 }
+
+house.onVisitor = (id) => {
+  if (save.visitors.includes(id)) return;
+  save.visitors.push(id);
+  writeSave(save);
+};
 
 house.onChange = () => {
   save.house = house.rows();

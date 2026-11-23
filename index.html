@@ -13,7 +13,7 @@
   // GitHub Pages は JS/CSS を10分キャッシュさせるので、更新直後に古いファイルが混ざらないよう毎回読みなおす。
   // js/ にファイルを増やしたら FILES にも足すこと
   (() => {
-    const FILES = ['main', 'game', 'house', 'friends', 'zukan', 'physics', 'stages', 'art', 'sensor', 'sound', 'save'];
+    const FILES = ['main', 'game', 'house', 'friends', 'visitors', 'zukan', 'physics', 'stages', 'art', 'sensor', 'sound', 'save'];
     const v = Date.now();
     const imports = {};
     for (const f of FILES) imports[new URL(`js/${f}.js`, location.href).href] = `./js/${f}.js?v=${v}`;
@@ -41,7 +41,13 @@
 </div>
 
 <div id="zukan" class="screen hidden">
-  <h2>ともだち ずかん <span id="zukanCount"></span></h2>
+  <div id="zukanHead">
+    <h2>ずかん</h2>
+    <div id="zukanTabs">
+      <button class="tab" data-tab="friend">ともだち <b></b></button>
+      <button class="tab" data-tab="visitor">おきゃくさん <b></b></button>
+    </div>
+  </div>
   <div id="zukanBody">
     <div id="zukanList"></div>
     <div id="zukanPage">
